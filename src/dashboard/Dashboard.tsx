@@ -4,7 +4,6 @@ import { DEFAULT_INSIGHTS_FILTER } from '../lib/types';
 import * as storage from '../lib/storage';
 import { runRules } from '../rules';
 import { useDashboardData } from './hooks/useDashboardData';
-import { SummaryStats } from './SummaryStats';
 import { InsightsPanel } from './InsightsPanel';
 import { OverviewTab } from './tabs/OverviewTab';
 import { CollectionsTab } from './tabs/CollectionsTab';
@@ -113,7 +112,6 @@ export function Dashboard() {
 
       {data && (
         <>
-          <SummaryStats data={data} />
           <InsightsPanel insights={insights} onNavigate={navigateToInsights} />
 
           <div className="tabs">

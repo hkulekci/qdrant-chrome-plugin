@@ -1,5 +1,6 @@
 import type { DashboardData } from '../../lib/types';
 import { formatBytes, formatDuration } from '../../lib/format';
+import { SummaryStats } from '../SummaryStats';
 
 export function OverviewTab({ data }: { data: DashboardData }) {
   const app = data.telemetry?.app;
@@ -21,7 +22,9 @@ export function OverviewTab({ data }: { data: DashboardData }) {
   const maxBytes = ramBytes || Math.max(...memItems.map(i => i.bytes || 0), 1);
 
   return (
-    <div className="grid-2">
+    <>
+      <SummaryStats data={data} />
+      <div className="grid-2">
       <div className="card">
         <h2>System Information</h2>
         <table className="info-table">
@@ -64,5 +67,6 @@ export function OverviewTab({ data }: { data: DashboardData }) {
         })}
       </div>
     </div>
+    </>
   );
 }
