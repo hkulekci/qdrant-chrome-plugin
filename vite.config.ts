@@ -19,6 +19,13 @@ export default defineConfig({
       input: {
         popup: resolve(__dirname, 'src/popup.html'),
         dashboard: resolve(__dirname, 'src/dashboard.html'),
+        background: resolve(__dirname, 'src/background.ts'),
+      },
+      output: {
+        entryFileNames: (chunkInfo) => {
+          if (chunkInfo.name === 'background') return 'background.js';
+          return 'assets/[name]-[hash].js';
+        },
       },
     },
     outDir: 'dist',

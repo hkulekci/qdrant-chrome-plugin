@@ -14,6 +14,7 @@ import { ClusterTab } from './tabs/ClusterTab';
 import { RequestsTab } from './tabs/RequestsTab';
 import { OptimizationsTab } from './tabs/OptimizationsTab';
 import { InsightsTab } from './tabs/InsightsTab';
+import { UpdateBanner } from '../components/UpdateBanner';
 
 type TabName = 'overview' | 'collections' | 'shards' | 'optimizations' | 'transfers' | 'cluster' | 'requests' | 'insights';
 
@@ -75,6 +76,7 @@ export function Dashboard() {
 
   return (
     <div className="container">
+      <UpdateBanner />
       <header>
         <div className="header-left">
           <h1>Qdrant Dashboard</h1>

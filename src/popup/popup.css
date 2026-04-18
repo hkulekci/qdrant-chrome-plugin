@@ -277,3 +277,67 @@ body {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Update Banner (compact variant for popup) */
+.update-banner {
+  background: linear-gradient(135deg, rgba(96, 165, 250, 0.2), rgba(139, 92, 246, 0.15));
+  border: 1px solid rgba(96, 165, 250, 0.5);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+}
+
+.update-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.update-banner-icon { font-size: 1rem; }
+
+.update-banner-text strong {
+  color: var(--text-primary);
+  font-size: 0.8rem;
+}
+
+.update-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-update-reload {
+  background: var(--info);
+  color: var(--bg-primary);
+  border: none;
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-update-reload:hover { filter: brightness(1.1); }
+
+.btn-update-dismiss {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-update-dismiss:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Qdrant Cluster Dashboard",
   "description": "Monitor and manage your Qdrant clusters directly from Chrome",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "permissions": [
     "storage"
   ],
@@ -17,6 +17,10 @@
       "32": "icons/icon32.png",
       "48": "icons/icon48.png"
     }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
   },
   "icons": {
     "16": "icons/icon16.png",

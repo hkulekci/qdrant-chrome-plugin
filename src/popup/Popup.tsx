@@ -3,6 +3,7 @@ import type { ClusterConfig } from '../lib/types';
 import * as storage from '../lib/storage';
 import { ClusterList } from './ClusterList';
 import { ClusterForm } from './ClusterForm';
+import { UpdateBanner } from '../components/UpdateBanner';
 
 export function Popup() {
   const [clusters, setClusters] = useState<ClusterConfig[]>([]);
@@ -41,6 +42,7 @@ export function Popup() {
 
   return (
     <div className="popup">
+      <UpdateBanner compact />
       <div className="header">
         <h1>Qdrant Clusters</h1>
         {view === 'list' && <button className="btn-icon" onClick={handleAdd} title="Add Cluster">+</button>}
