@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { Insight, InsightLevel, InsightsFilter } from '../../lib/types';
 import { DEFAULT_INSIGHTS_FILTER } from '../../lib/types';
+import { AskAIDialog } from '../AskAIDialog';
 
 const ICONS: Record<InsightLevel, string> = {
   critical: '\u26d4',
@@ -18,7 +19,7 @@ const LEVEL_LABEL: Record<InsightLevel, string> = {
 
 const ALL_LEVELS: InsightLevel[] = ['critical', 'warning', 'performance', 'info'];
 
-function InsightItem({ insight }: { insight: Insight }) {
+function InsightItem({ insight, onAsk }: { insight: Insight; onAsk: (ins: Insight) => void }) {
   return (
     <div className={`insight-item ${insight.level}`}>
       <span className="insight-icon">{ICONS[insight.level]}</span>
@@ -31,6 +32,14 @@ function InsightItem({ insight }: { insight: Insight }) {
         </div>
         <div className="insight-detail">{insight.detail}</div>
       </div>
+      <button
+        className="insight-ask-ai"
+        onClick={() => onAsk(insight)}
+        title="Ask an AI about this insight"
+      >
+        <span className="ask-ai-sparkle">\u2728</span>
+        <span className="ask-ai-text">Ask AI</span>
+      </button>
     </div>
   );
 }
@@ -43,6 +52,7 @@ interface Props {
 }
 
 export function InsightsTab({ insights, filter, onFilterChange, collections }: Props) {
+  const [asking, setAsking] = useState<Insight | null>(null);
   const categories = useMemo(() => {
     const set = new Set<string>();
     for (const i of insights) set.add(i.category);
@@ -178,7 +188,7 @@ export function InsightsTab({ insights, filter, onFilterChange, collections }: P
         </div>
       ) : filter.group === 'flat' || !grouped ? (
         <div className="insights-list">
-          {filtered.map((ins, i) => <InsightItem key={i} insight={ins} />)}
+          {filtered.map((ins, i) => <InsightItem key={i} insight={ins} onAsk={setAsking} />)}
         </div>
       ) : (
         groupOrder
@@ -193,11 +203,12 @@ export function InsightsTab({ insights, filter, onFilterChange, collections }: P
                 <span className="insights-group-count">{grouped[key].length}</span>
               </div>
               <div className="insights-list">
-                {grouped[key].map((ins, i) => <InsightItem key={i} insight={ins} />)}
+                {grouped[key].map((ins, i) => <InsightItem key={i} insight={ins} onAsk={setAsking} />)}
               </div>
             </div>
           ))
       )}
+      <AskAIDialog insight={asking} onClose={() => setAsking(null)} />
     </>
   );
 }
