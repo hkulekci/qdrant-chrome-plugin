@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Qdrant Cluster Dashboard",
   "description": "Monitor and manage your Qdrant clusters directly from Chrome",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "permissions": [
     "storage"
   ],
