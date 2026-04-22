@@ -215,13 +215,38 @@ function CollectionCard({ name, info, insights, cluster, onOptimized, onNavigate
         <div className="config-section">
           <h3>Payload Indexes {payloadEntries.length > 0 ? `(${payloadEntries.length})` : ''}</h3>
           {payloadEntries.length > 0 ? (
-            <table className="info-table"><tbody>
+            <div className="payload-index-list">
               {payloadEntries.map(([field, schema]) => {
-                const type = schema.params?.type || schema.data_type || '?';
-                const extras = [schema.params?.is_tenant && 'tenant', schema.params?.on_disk && 'on disk', schema.params?.is_principal && 'principal'].filter(Boolean);
-                return <tr key={field}><td>{field}</td><td>{type}{extras.length ? ` (${extras.join(', ')})` : ''}{schema.points != null ? ` - ${formatNumber(schema.points)} pts` : ''}</td></tr>;
+                const p = schema.params || {};
+                const type = p.type || schema.data_type || '?';
+                const hnswExplicitlyDisabled = p.enable_hnsw === false;
+                const hnswExplicitlyEnabled = p.enable_hnsw === true;
+                return (
+                  <div key={field} className="payload-index-row">
+                    <span className="payload-index-field">{field}</span>
+                    <span className={`payload-index-type type-${type}`}>{type}</span>
+                    <span className="payload-index-flags">
+                      {p.is_tenant && <span className="payload-flag tenant" title="Tenant-optimized index (non-default)">tenant<span className="cfg-changed">&#9888;</span></span>}
+                      {p.is_principal && <span className="payload-flag principal" title="Principal field for tenant routing (non-default)">principal<span className="cfg-changed">&#9888;</span></span>}
+                      {p.on_disk ? (
+                        <span className="payload-flag on-disk" title="Stored on disk. Default is in-memory — this trades RAM for disk I/O on filter queries.">on disk<span className="cfg-changed">&#9888;</span></span>
+                      ) : (
+                        <span className="payload-flag in-memory" title="Kept in memory (default)">in memory</span>
+                      )}
+                      {hnswExplicitlyDisabled && (
+                        <span className="payload-flag hnsw-off" title="HNSW graph building disabled for this field (non-default)">HNSW off<span className="cfg-changed">&#9888;</span></span>
+                      )}
+                      {hnswExplicitlyEnabled && (
+                        <span className="payload-flag hnsw-on" title="HNSW graph building enabled — needs payload_m > 0 (default)">HNSW on</span>
+                      )}
+                    </span>
+                    {schema.points != null && (
+                      <span className="payload-index-points">{formatNumber(schema.points)} pts</span>
+                    )}
+                  </div>
+                );
               })}
-            </tbody></table>
+            </div>
           ) : (
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', padding: '8px 0' }}>No payload indexes defined</p>
           )}

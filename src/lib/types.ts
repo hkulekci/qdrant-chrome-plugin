@@ -109,7 +109,13 @@ export interface StrictModeConfig {
 
 export interface PayloadSchemaEntry {
   data_type?: string;
-  params?: { type?: string; is_tenant?: boolean; on_disk?: boolean; is_principal?: boolean };
+  params?: {
+    type?: string;
+    is_tenant?: boolean;
+    on_disk?: boolean;
+    is_principal?: boolean;
+    enable_hnsw?: boolean;
+  };
   points?: number;
 }
 

@@ -212,3 +212,53 @@ registerRule('empty-collection', (ctx) => {
   }
   return insights;
 });
+
+// Payload index on_disk is non-default (default is false = in-memory).
+// Surface it so operators see the tradeoff consciously.
+registerRule('payload-index-on-disk', (ctx) => {
+  const insights: Insight[] = [];
+  for (const name of ctx.collections) {
+    const info = ctx.collectionDetails[name]?.info;
+    if (!info) continue;
+    const schema = info.payload_schema || {};
+    const onDiskFields = Object.entries(schema)
+      .filter(([, s]) => s.params?.on_disk === true)
+      .map(([field]) => field);
+    if (onDiskFields.length === 0) continue;
+
+    const list = onDiskFields.slice(0, 4).join(', ') + (onDiskFields.length > 4 ? `, +${onDiskFields.length - 4} more` : '');
+    insights.push({
+      level: 'info',
+      category: 'config',
+      collection: name,
+      title: `${onDiskFields.length} payload index${onDiskFields.length === 1 ? '' : 'es'} stored on disk`,
+      detail: `Fields: ${list}. on_disk is non-default (default: in-memory). Trades RAM for disk I/O on filter queries — good when the collection has many large payload indexes, but adds latency when cache is cold.`,
+    });
+  }
+  return insights;
+});
+
+// Payload index with enable_hnsw: false — means the field won't get
+// extra HNSW edges for filtering. Usually unintentional.
+registerRule('payload-index-hnsw-disabled', (ctx) => {
+  const insights: Insight[] = [];
+  for (const name of ctx.collections) {
+    const info = ctx.collectionDetails[name]?.info;
+    if (!info) continue;
+    const schema = info.payload_schema || {};
+    const disabledFields = Object.entries(schema)
+      .filter(([, s]) => s.params?.enable_hnsw === false)
+      .map(([field]) => field);
+    if (disabledFields.length === 0) continue;
+
+    const list = disabledFields.slice(0, 4).join(', ') + (disabledFields.length > 4 ? `, +${disabledFields.length - 4} more` : '');
+    insights.push({
+      level: 'performance',
+      category: 'config',
+      collection: name,
+      title: `${disabledFields.length} payload index${disabledFields.length === 1 ? '' : 'es'} with HNSW disabled`,
+      detail: `Fields: ${list}. enable_hnsw is false, so filtered searches on these fields will not benefit from HNSW shortcuts. Re-enable unless you intentionally excluded them.`,
+    });
+  }
+  return insights;
+});

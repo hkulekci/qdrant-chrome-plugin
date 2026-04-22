@@ -30,6 +30,12 @@ export const DEFAULTS = {
     wal_capacity_mb: 32,
     wal_segments_ahead: 0,
   },
+  payload_index: {
+    on_disk: false,
+    is_tenant: false,
+    is_principal: false,
+    enable_hnsw: true,
+  },
 } as const;
 
 // Check if a value differs from default
