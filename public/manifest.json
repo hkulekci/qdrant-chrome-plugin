@@ -4,6 +4,7 @@
   "description": "Monitor and manage your Qdrant clusters directly from Chrome",
   "version": "0.1.3",
   "permissions": [
+    "alarms",
     "storage"
   ],
   "host_permissions": [

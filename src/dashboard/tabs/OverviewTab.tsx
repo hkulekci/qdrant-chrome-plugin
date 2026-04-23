@@ -1,8 +1,8 @@
-import type { DashboardData } from '../../lib/types';
-import { formatBytes, formatDuration } from '../../lib/format';
+import type { DashboardData, MetricsHistorySample } from '../../lib/types';
+import { formatBytes, formatDuration, formatNumber } from '../../lib/format';
 import { SummaryStats } from '../SummaryStats';
 
-export function OverviewTab({ data }: { data: DashboardData }) {
+export function OverviewTab({ data, history, capturedAt }: { data: DashboardData; history: MetricsHistorySample[]; capturedAt: string | null }) {
   const app = data.telemetry?.app;
   const sys = app?.system;
   const features = app?.features || {};
@@ -11,6 +11,12 @@ export function OverviewTab({ data }: { data: DashboardData }) {
 
   const startup = app?.startup ? new Date(app.startup).toLocaleString() : 'N/A';
   const uptime = app?.startup ? formatDuration(Date.now() - new Date(app.startup).getTime()) : 'N/A';
+  const firstSample = history[0];
+  const latestSample = history[history.length - 1];
+  const historyWindow = firstSample && latestSample
+    ? formatDuration(new Date(latestSample.capturedAt).getTime() - new Date(firstSample.capturedAt).getTime())
+    : 'N/A';
+  const pointDelta = firstSample && latestSample ? latestSample.totalPoints - firstSample.totalPoints : 0;
 
   const memItems = [
     { name: 'Resident', bytes: mem?.resident_bytes, color: '#e94560', desc: 'Physical memory used' },
@@ -65,6 +71,18 @@ export function OverviewTab({ data }: { data: DashboardData }) {
             </div>
           );
         })}
+      </div>
+      <div className="card">
+        <h2>Cached Monitoring</h2>
+        <table className="info-table">
+          <tbody>
+            <tr><td>Last Successful Snapshot</td><td>{capturedAt ? new Date(capturedAt).toLocaleString() : 'N/A'}</td></tr>
+            <tr><td>History Samples</td><td>{history.length}</td></tr>
+            <tr><td>History Window</td><td>{history.length > 1 ? historyWindow : 'Waiting for another sample'}</td></tr>
+            <tr><td>Point Change</td><td>{history.length > 1 ? `${pointDelta >= 0 ? '+' : ''}${formatNumber(pointDelta)}` : 'N/A'}</td></tr>
+            <tr><td>Latest Indexed Vectors</td><td>{latestSample ? formatNumber(latestSample.totalIndexedVectors) : 'N/A'}</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
     </>

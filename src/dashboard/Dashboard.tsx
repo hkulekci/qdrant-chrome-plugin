@@ -32,9 +32,8 @@ const TABS: { key: TabName; label: string }[] = [
 export function Dashboard() {
   const [cluster, setCluster] = useState<ClusterConfig | null>(null);
   const [activeTab, setActiveTab] = useState<TabName>('overview');
-  const [lastUpdated, setLastUpdated] = useState('');
   const [insightsFilter, setInsightsFilter] = useState<InsightsFilter>(DEFAULT_INSIGHTS_FILTER);
-  const { data, loading, error, refresh } = useDashboardData(cluster);
+  const { data, loading, error, capturedAt, history, refresh } = useDashboardData(cluster);
 
   const navigateToInsights = (filterOverride?: Partial<InsightsFilter>) => {
     setInsightsFilter({ ...DEFAULT_INSIGHTS_FILTER, ...filterOverride });
@@ -59,16 +58,13 @@ export function Dashboard() {
     if (cluster) refresh();
   }, [cluster]);
 
-  useEffect(() => {
-    if (data) setLastUpdated(new Date().toLocaleTimeString());
-  }, [data]);
-
   const insights: Insight[] = data ? runRules(data) : [];
   const criticalCount = insights.filter(i => i.level === 'critical').length;
   const warningCount = insights.filter(i => i.level === 'warning').length;
   const version = data?.telemetry?.app?.version;
   const nodeCount = Object.keys(data?.nodeTelemetry || {}).length;
   const totalPeers = data?.cluster?.peers ? Object.keys(data.cluster.peers).length : 1;
+  const lastUpdated = capturedAt ? new Date(capturedAt).toLocaleTimeString() : '';
 
   if (!cluster) {
     return <div className="container"><div className="error-box">No cluster specified. Open a cluster from the popup.</div></div>;
@@ -133,7 +129,7 @@ export function Dashboard() {
             })}
           </div>
 
-          {activeTab === 'overview' && <OverviewTab data={data} />}
+          {activeTab === 'overview' && <OverviewTab data={data} history={history} capturedAt={capturedAt} />}
           {activeTab === 'collections' && <CollectionsTab data={data} insights={insights} cluster={cluster} onRefresh={refresh} onNavigateInsights={navigateToInsights} />}
           {activeTab === 'shards' && <ShardsTab data={data} />}
           {activeTab === 'optimizations' && <OptimizationsTab data={data} cluster={cluster} />}

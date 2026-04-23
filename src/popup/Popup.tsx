@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { ClusterConfig } from '../lib/types';
+import type { ClusterConfig, ClusterRefreshState } from '../lib/types';
 import * as storage from '../lib/storage';
 import { ClusterList } from './ClusterList';
 import { ClusterForm } from './ClusterForm';
@@ -8,11 +8,18 @@ import { ThemeToggle } from '../components/ThemeToggle';
 
 export function Popup() {
   const [clusters, setClusters] = useState<ClusterConfig[]>([]);
+  const [refreshStates, setRefreshStates] = useState<Record<string, ClusterRefreshState>>({});
   const [view, setView] = useState<'list' | 'form'>('list');
   const [editing, setEditing] = useState<ClusterConfig | null>(null);
 
   const loadClusters = async () => {
-    setClusters(await storage.getClusters());
+    const nextClusters = await storage.getClusters();
+    const states = await Promise.all(nextClusters.map(c => storage.getClusterRefreshState(c.id)));
+    const refreshStateEntries = states
+      .filter((state): state is ClusterRefreshState => state !== null)
+      .map(state => [state.clusterId, state]);
+    setClusters(nextClusters);
+    setRefreshStates(Object.fromEntries(refreshStateEntries));
   };
 
   useEffect(() => { loadClusters(); }, []);
@@ -52,7 +59,7 @@ export function Popup() {
         </div>
       </div>
       {view === 'list' ? (
-        <ClusterList clusters={clusters} onEdit={handleEdit} onDelete={handleDelete} onOpen={handleOpen} />
+        <ClusterList clusters={clusters} refreshStates={refreshStates} onEdit={handleEdit} onDelete={handleDelete} onOpen={handleOpen} />
       ) : (
         <ClusterForm initial={editing} onSave={handleSave} onCancel={handleCancel} />
       )}
