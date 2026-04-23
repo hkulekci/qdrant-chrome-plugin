@@ -33,7 +33,7 @@ export function Dashboard() {
   const [cluster, setCluster] = useState<ClusterConfig | null>(null);
   const [activeTab, setActiveTab] = useState<TabName>('overview');
   const [insightsFilter, setInsightsFilter] = useState<InsightsFilter>(DEFAULT_INSIGHTS_FILTER);
-  const { data, loading, error, capturedAt, history, refresh } = useDashboardData(cluster);
+  const { data, loading, error, capturedAt, history, refreshState, refresh } = useDashboardData(cluster);
 
   const navigateToInsights = (filterOverride?: Partial<InsightsFilter>) => {
     setInsightsFilter({ ...DEFAULT_INSIGHTS_FILTER, ...filterOverride });
@@ -129,7 +129,7 @@ export function Dashboard() {
             })}
           </div>
 
-          {activeTab === 'overview' && <OverviewTab data={data} history={history} capturedAt={capturedAt} />}
+          {activeTab === 'overview' && <OverviewTab data={data} history={history} capturedAt={capturedAt} refreshState={refreshState} />}
           {activeTab === 'collections' && <CollectionsTab data={data} insights={insights} cluster={cluster} onRefresh={refresh} onNavigateInsights={navigateToInsights} />}
           {activeTab === 'shards' && <ShardsTab data={data} />}
           {activeTab === 'optimizations' && <OptimizationsTab data={data} cluster={cluster} />}

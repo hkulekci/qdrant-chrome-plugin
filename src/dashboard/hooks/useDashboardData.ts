@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import type { DashboardData, ClusterConfig, MetricsHistorySample } from '../../lib/types';
+import type { DashboardData, ClusterConfig, ClusterRefreshState, MetricsHistorySample } from '../../lib/types';
 import { QdrantApi } from '../../lib/qdrant-api';
 import * as storage from '../../lib/storage';
 
@@ -9,6 +9,7 @@ interface UseDashboardDataResult {
   error: string | null;
   capturedAt: string | null;
   history: MetricsHistorySample[];
+  refreshState: ClusterRefreshState | null;
   refresh: () => void;
 }
 
@@ -18,18 +19,21 @@ export function useDashboardData(cluster: ClusterConfig | null): UseDashboardDat
   const [error, setError] = useState<string | null>(null);
   const [capturedAt, setCapturedAt] = useState<string | null>(null);
   const [history, setHistory] = useState<MetricsHistorySample[]>([]);
+  const [refreshState, setRefreshState] = useState<ClusterRefreshState | null>(null);
 
   const loadCachedData = useCallback(async () => {
     if (!cluster) {
       setData(null);
       setCapturedAt(null);
       setHistory([]);
+      setRefreshState(null);
       return;
     }
 
-    const [snapshot, storedHistory] = await Promise.all([
+    const [snapshot, storedHistory, storedRefreshState] = await Promise.all([
       storage.getDashboardSnapshot(cluster.id),
       storage.getMetricsHistory(cluster.id),
+      storage.getClusterRefreshState(cluster.id),
     ]);
 
     if (snapshot) {
@@ -40,6 +44,7 @@ export function useDashboardData(cluster: ClusterConfig | null): UseDashboardDat
       setCapturedAt(null);
     }
     setHistory(storedHistory);
+    setRefreshState(storedRefreshState);
   }, [cluster?.id]);
 
   useEffect(() => {
@@ -55,17 +60,20 @@ export function useDashboardData(cluster: ClusterConfig | null): UseDashboardDat
       const result = await api.getDashboardData();
       const snapshot = await storage.saveDashboardSnapshot(cluster.id, result);
       const storedHistory = await storage.getMetricsHistory(cluster.id);
+      const storedRefreshState = await storage.getClusterRefreshState(cluster.id);
       setData(result);
       setCapturedAt(snapshot.capturedAt);
       setHistory(storedHistory);
+      setRefreshState(storedRefreshState);
     } catch (e) {
       const message = (e as Error).message;
       await storage.recordClusterRefreshFailure(cluster.id, message);
+      setRefreshState(await storage.getClusterRefreshState(cluster.id));
       setError(`Failed to load live data: ${message}`);
     } finally {
       setLoading(false);
     }
   }, [cluster?.id, cluster?.url, cluster?.apiKey]);
 
-  return { data, loading, error, capturedAt, history, refresh };
+  return { data, loading, error, capturedAt, history, refreshState, refresh };
 }
