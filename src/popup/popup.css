@@ -141,6 +141,15 @@ body {
   font-family: monospace;
 }
 
+.cluster-item-cache {
+  font-size: 0.72rem;
+  color: var(--info);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .cluster-item-actions {
   display: flex;
   gap: 4px;

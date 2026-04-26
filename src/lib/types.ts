@@ -39,6 +39,7 @@ export interface ClusterInfo {
 export interface CollectionInfo {
   status: string;
   optimizer_status: string | { error: string };
+  vectors_count?: number;
   indexed_vectors_count: number;
   points_count: number;
   segments_count: number;
@@ -336,6 +337,41 @@ export interface DashboardData {
   collectionDetails: Record<string, CollectionDetail>;
   telemetry: Telemetry | null;
   nodeTelemetry: Record<string, Telemetry>;
+}
+
+// --- Cached Monitoring Data ---
+
+export interface CachedDashboardSnapshot {
+  clusterId: string;
+  capturedAt: string;
+  data: DashboardData;
+}
+
+export interface ClusterRefreshState {
+  clusterId: string;
+  lastAttemptAt: string;
+  lastSuccessAt?: string;
+  lastError?: string;
+}
+
+export interface CollectionMetricSample {
+  collection: string;
+  status: string;
+  points: number;
+  vectors: number | null;
+  indexedVectors: number;
+  segments: number;
+}
+
+export interface MetricsHistorySample {
+  clusterId: string;
+  capturedAt: string;
+  qdrantUp: 0 | 1;
+  totalPoints: number;
+  totalVectors: number | null;
+  totalIndexedVectors: number;
+  totalSegments: number;
+  collections: CollectionMetricSample[];
 }
 
 // --- Insights / Rules ---

@@ -1,15 +1,21 @@
 import { useState, useEffect } from 'react';
-import type { ClusterConfig } from '../lib/types';
+import type { ClusterConfig, ClusterRefreshState } from '../lib/types';
 import { QdrantApi } from '../lib/qdrant-api';
 
 interface Props {
   clusters: ClusterConfig[];
+  refreshStates: Record<string, ClusterRefreshState>;
   onEdit: (c: ClusterConfig) => void;
   onDelete: (id: string) => void;
   onOpen: (id: string) => void;
 }
 
-export function ClusterList({ clusters, onEdit, onDelete, onOpen }: Props) {
+function formatRefreshState(state?: ClusterRefreshState): string {
+  if (!state?.lastSuccessAt) return 'No cached snapshot yet';
+  return `Cached ${new Date(state.lastSuccessAt).toLocaleString()}`;
+}
+
+export function ClusterList({ clusters, refreshStates, onEdit, onDelete, onOpen }: Props) {
   const [health, setHealth] = useState<Record<string, 'checking' | 'online' | 'offline'>>({});
 
   useEffect(() => {
@@ -45,6 +51,7 @@ export function ClusterList({ clusters, onEdit, onDelete, onOpen }: Props) {
           <div className="cluster-item-info" onClick={() => onOpen(c.id)}>
             <div className="cluster-item-name">{c.name}</div>
             <div className="cluster-item-url">{c.url}</div>
+            <div className="cluster-item-cache">{formatRefreshState(refreshStates[c.id])}</div>
           </div>
           <div className="cluster-item-actions">
             <button className="edit-btn" onClick={(e) => { e.stopPropagation(); onEdit(c); }} title="Edit">&#9998;</button>
