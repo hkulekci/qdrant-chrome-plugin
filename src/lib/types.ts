@@ -6,6 +6,9 @@ export interface ClusterConfig {
   url: string;
   apiKey?: string;
   addedAt: string;
+  /** How often the background worker may refresh this cluster's snapshot,
+   *  in minutes. Min 1, default 5. Stored optionally for backward compat. */
+  cachedFrequencyMinutes?: number;
 }
 
 // --- Qdrant API Response Types ---
@@ -371,6 +374,10 @@ export interface MetricsHistorySample {
   totalVectors: number | null;
   totalIndexedVectors: number;
   totalSegments: number;
+  /** Optional for backward compat with samples written before this field existed. */
+  totalCollections?: number;
+  /** Sum of logical shard_number across all collections; optional for backward compat. */
+  totalShards?: number;
   collections: CollectionMetricSample[];
 }
 

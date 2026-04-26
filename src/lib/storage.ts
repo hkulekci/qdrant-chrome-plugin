@@ -6,11 +6,16 @@ import type {
   MetricsHistorySample,
 } from './types';
 import { createMetricsSample } from './metrics';
+import { STORAGE_BUDGET_BYTES } from './cache-config';
 
 const SNAPSHOT_PREFIX = 'dashboardSnapshot:';
 const REFRESH_STATE_PREFIX = 'clusterRefreshState:';
 const HISTORY_PREFIX = 'metricsHistory:';
 const MAX_HISTORY_SAMPLES = 288;
+
+function jsonByteSize(value: unknown): number {
+  return new Blob([JSON.stringify(value)]).size;
+}
 
 export async function getClusters(): Promise<ClusterConfig[]> {
   const data = await chrome.storage.local.get('clusters') as { clusters?: ClusterConfig[] };
@@ -76,6 +81,19 @@ export async function setClusterRefreshState(state: ClusterRefreshState): Promis
   await chrome.storage.local.set({ [`${REFRESH_STATE_PREFIX}${state.clusterId}`]: state });
 }
 
+/**
+ * Drops the snapshot, refresh state, and metrics history for one cluster.
+ * The cluster config itself is preserved — caller usually triggers a fresh
+ * refresh right after to repopulate.
+ */
+export async function clearClusterCache(clusterId: string): Promise<void> {
+  await chrome.storage.local.remove([
+    `${SNAPSHOT_PREFIX}${clusterId}`,
+    `${REFRESH_STATE_PREFIX}${clusterId}`,
+    `${HISTORY_PREFIX}${clusterId}`,
+  ]);
+}
+
 export async function recordClusterRefreshFailure(clusterId: string, error: string, attemptedAt = new Date().toISOString()): Promise<void> {
   const previous = await getClusterRefreshState(clusterId);
   await setClusterRefreshState({
@@ -92,9 +110,29 @@ export async function getMetricsHistory(clusterId: string): Promise<MetricsHisto
   return data[key] || [];
 }
 
+/**
+ * Appends a metrics sample, then enforces both the hard sample-count cap
+ * (MAX_HISTORY_SAMPLES) and the soft storage byte budget (STORAGE_BUDGET_BYTES).
+ *
+ * Byte enforcement reads the live total via getBytesInUse so the budget
+ * accounts for snapshots, refresh state, and other clusters' histories — not
+ * just this cluster's series. When the projected total would exceed the
+ * budget, we drop the oldest samples from THIS cluster's history (FIFO)
+ * until it fits or only the new sample remains.
+ */
 export async function appendMetricsHistorySample(sample: MetricsHistorySample): Promise<void> {
   const key = `${HISTORY_PREFIX}${sample.clusterId}`;
-  const history = await getMetricsHistory(sample.clusterId);
-  const next = [...history, sample].slice(-MAX_HISTORY_SAMPLES);
-  await chrome.storage.local.set({ [key]: next });
+  const oldHistory = await getMetricsHistory(sample.clusterId);
+  let nextHistory = [...oldHistory, sample].slice(-MAX_HISTORY_SAMPLES);
+
+  const totalBytesBefore = await chrome.storage.local.getBytesInUse(null);
+  const oldKeyBytes = oldHistory.length === 0 ? 0 : jsonByteSize(oldHistory);
+  let projected = totalBytesBefore - oldKeyBytes + jsonByteSize(nextHistory);
+
+  while (projected > STORAGE_BUDGET_BYTES && nextHistory.length > 1) {
+    nextHistory = nextHistory.slice(1);
+    projected = totalBytesBefore - oldKeyBytes + jsonByteSize(nextHistory);
+  }
+
+  await chrome.storage.local.set({ [key]: nextHistory });
 }

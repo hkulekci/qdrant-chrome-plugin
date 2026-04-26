@@ -11,6 +11,9 @@ interface UseDashboardDataResult {
   history: MetricsHistorySample[];
   refreshState: ClusterRefreshState | null;
   refresh: () => void;
+  /** Drops cached snapshot/history/state for the active cluster, then
+   *  triggers a fresh fetch so the UI is repopulated immediately. */
+  clearCache: () => Promise<void>;
 }
 
 export function useDashboardData(cluster: ClusterConfig | null): UseDashboardDataResult {
@@ -75,5 +78,18 @@ export function useDashboardData(cluster: ClusterConfig | null): UseDashboardDat
     }
   }, [cluster?.id, cluster?.url, cluster?.apiKey]);
 
-  return { data, loading, error, capturedAt, history, refreshState, refresh };
+  const clearCache = useCallback(async () => {
+    if (!cluster) return;
+    await storage.clearClusterCache(cluster.id);
+    // Reset local state so the UI doesn't keep showing stale numbers
+    // between the clear and the subsequent refresh's response.
+    setData(null);
+    setCapturedAt(null);
+    setHistory([]);
+    setRefreshState(null);
+    setError(null);
+    await refresh();
+  }, [cluster?.id, refresh]);
+
+  return { data, loading, error, capturedAt, history, refreshState, refresh, clearCache };
 }

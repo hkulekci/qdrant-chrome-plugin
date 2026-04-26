@@ -546,15 +546,15 @@ header h1 {
   gap: 2px;
   margin-bottom: 20px;
   background: var(--bg-secondary);
-  padding: 4px;
+  padding: 6px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
-  overflow-x: auto;
+  flex-wrap: wrap;
 }
 
 .tab {
   position: relative;
-  padding: 9px 18px;
+  padding: 12px 20px;
   border: none;
   background: transparent;
   color: var(--text-secondary);
@@ -583,7 +583,7 @@ header h1 {
   content: '';
   position: absolute;
   left: 50%;
-  bottom: -6px;
+  bottom: 4px;
   width: 20px;
   height: 2px;
   background: var(--accent);
@@ -623,6 +623,299 @@ header h1 {
   height: 14px;
   background: var(--accent);
   border-radius: 2px;
+}
+
+/* Card title rows that need a control on the right */
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+
+/* Single-line variant — never wraps the actions onto a second row */
+.card-header-row-tight {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.card-header-row-tight h2 {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-header-row h2 {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.card-inline-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+
+.card-inline-control select {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+  cursor: pointer;
+  transition: border-color var(--dur) var(--ease-out);
+}
+
+.card-inline-control select:hover,
+.card-inline-control select:focus {
+  border-color: var(--border-strong);
+  outline: none;
+}
+
+.card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.card-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease-out),
+              border-color var(--dur) var(--ease-out),
+              background var(--dur) var(--ease-out);
+}
+
+.card-clear-btn:hover:not(:disabled) {
+  color: var(--error);
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.card-clear-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---------- Metric cards with inline sparkline ---------- */
+
+.metric-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+/* When charts are at the top of the card, drop the divider above them */
+.metric-cards-top {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.cached-monitoring-empty {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-style: italic;
+  padding: 18px 4px;
+  text-align: center;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+}
+
+/* Footer slot for destructive actions, right-aligned */
+.card-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+/* Cached Monitoring footer: meta text on the left, action on the right */
+.cache-footer {
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cache-meta-text {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.cache-meta-text strong {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.cache-meta-sep {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+/* Error banner shown only when refreshState.lastError exists */
+.cache-error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+  border-radius: var(--radius-md);
+  font-size: 0.8rem;
+  color: var(--error);
+}
+
+.cache-error-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.cache-error-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.cache-error-title {
+  font-weight: 600;
+  color: var(--error);
+  margin-bottom: 2px;
+}
+
+.cache-error-message {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  word-break: break-word;
+  opacity: 0.9;
+}
+
+.metric-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+}
+
+.metric-card-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.metric-card-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.4rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+
+.metric-card-delta {
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.metric-card-delta.pos { color: var(--success); }
+.metric-card-delta.neg { color: var(--error); }
+.metric-card-delta.neutral { color: var(--text-muted); }
+
+/* ---------- Sparkline primitive ---------- */
+
+.sparkline-wrap {
+  position: relative;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.sparkline {
+  display: block;
+  width: 100%;
+  cursor: crosshair;
+}
+
+.sparkline-empty {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  padding: 6px 0;
+  font-style: italic;
+}
+
+.sparkline-tooltip {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  transform: translateX(-50%);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-sm);
+  z-index: 5;
+  font-size: 0.72rem;
+}
+
+.sparkline-tooltip-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.sparkline-tooltip-time {
+  color: var(--text-secondary);
+  font-size: 0.66rem;
 }
 
 .grid-2 {

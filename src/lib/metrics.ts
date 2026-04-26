@@ -10,6 +10,7 @@ export function createMetricsSample(
   let hasVectorCounts = false;
   let totalIndexedVectors = 0;
   let totalSegments = 0;
+  let totalShards = 0;
 
   const collections = data.collections.flatMap((collection) => {
     const info = data.collectionDetails[collection]?.info;
@@ -18,6 +19,7 @@ export function createMetricsSample(
     totalPoints += info.points_count || 0;
     totalIndexedVectors += info.indexed_vectors_count || 0;
     totalSegments += info.segments_count || 0;
+    totalShards += info.config?.params?.shard_number || 1;
 
     const vectors = typeof info.vectors_count === 'number' ? info.vectors_count : null;
     if (vectors !== null) {
@@ -43,6 +45,8 @@ export function createMetricsSample(
     totalVectors: hasVectorCounts ? totalVectors : null,
     totalIndexedVectors,
     totalSegments,
+    totalCollections: collections.length,
+    totalShards,
     collections,
   };
 }

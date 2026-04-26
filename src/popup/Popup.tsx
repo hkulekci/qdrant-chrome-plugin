@@ -28,7 +28,7 @@ export function Popup() {
   const handleEdit = (c: ClusterConfig) => { setEditing(c); setView('form'); };
   const handleCancel = () => { setView('list'); setEditing(null); };
 
-  const handleSave = async (data: { name: string; url: string; apiKey: string }) => {
+  const handleSave = async (data: { name: string; url: string; apiKey: string; cachedFrequencyMinutes: number }) => {
     if (editing) {
       await storage.updateCluster(editing.id, data);
     } else {

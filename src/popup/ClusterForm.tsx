@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import type { ClusterConfig } from '../lib/types';
 import { QdrantApi } from '../lib/qdrant-api';
+import { DEFAULT_CACHED_FREQUENCY_MINUTES, MIN_CACHED_FREQUENCY_MINUTES, MAX_CACHED_FREQUENCY_MINUTES } from '../lib/cache-config';
 
 interface Props {
   initial: ClusterConfig | null;
-  onSave: (data: { name: string; url: string; apiKey: string }) => void;
+  onSave: (data: { name: string; url: string; apiKey: string; cachedFrequencyMinutes: number }) => void;
   onCancel: () => void;
 }
 
@@ -12,6 +13,7 @@ export function ClusterForm({ initial, onSave, onCancel }: Props) {
   const [name, setName] = useState(initial?.name || '');
   const [url, setUrl] = useState(initial?.url || '');
   const [apiKey, setApiKey] = useState(initial?.apiKey || '');
+  const [frequency, setFrequency] = useState<number>(initial?.cachedFrequencyMinutes ?? DEFAULT_CACHED_FREQUENCY_MINUTES);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [testing, setTesting] = useState(false);
@@ -42,7 +44,8 @@ export function ClusterForm({ initial, onSave, onCancel }: Props) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !url) { setError('Name and URL are required'); return; }
-    onSave({ name, url, apiKey });
+    const clamped = Math.min(MAX_CACHED_FREQUENCY_MINUTES, Math.max(MIN_CACHED_FREQUENCY_MINUTES, Math.round(frequency)));
+    onSave({ name, url, apiKey, cachedFrequencyMinutes: clamped });
   };
 
   return (
@@ -59,6 +62,20 @@ export function ClusterForm({ initial, onSave, onCancel }: Props) {
       <div className="form-field">
         <label>API Key</label>
         <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="your-api-key" />
+      </div>
+      <div className="form-field">
+        <label>
+          Background refresh
+          <span className="form-field-hint"> &mdash; how often to fetch this cluster (min)</span>
+        </label>
+        <input
+          type="number"
+          min={MIN_CACHED_FREQUENCY_MINUTES}
+          max={MAX_CACHED_FREQUENCY_MINUTES}
+          step={1}
+          value={frequency}
+          onChange={e => setFrequency(Number(e.target.value) || DEFAULT_CACHED_FREQUENCY_MINUTES)}
+        />
       </div>
       {error && <div className="form-error">{error}</div>}
       {success && <div className="form-success">{success}</div>}

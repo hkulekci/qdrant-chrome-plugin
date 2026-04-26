@@ -33,11 +33,17 @@ export function Dashboard() {
   const [cluster, setCluster] = useState<ClusterConfig | null>(null);
   const [activeTab, setActiveTab] = useState<TabName>('overview');
   const [insightsFilter, setInsightsFilter] = useState<InsightsFilter>(DEFAULT_INSIGHTS_FILTER);
-  const { data, loading, error, capturedAt, history, refreshState, refresh } = useDashboardData(cluster);
+  const { data, loading, error, capturedAt, history, refreshState, refresh, clearCache } = useDashboardData(cluster);
 
   const navigateToInsights = (filterOverride?: Partial<InsightsFilter>) => {
     setInsightsFilter({ ...DEFAULT_INSIGHTS_FILTER, ...filterOverride });
     setActiveTab('insights');
+  };
+
+  const updateCluster = async (updates: Partial<ClusterConfig>): Promise<void> => {
+    if (!cluster) return;
+    const updated = await storage.updateCluster(cluster.id, updates);
+    setCluster(updated);
   };
 
   useEffect(() => {
@@ -56,7 +62,11 @@ export function Dashboard() {
 
   useEffect(() => {
     if (cluster) refresh();
-  }, [cluster]);
+    // Only re-fetch when the cluster identity changes, not on field
+    // updates (e.g. cachedFrequencyMinutes), which should not produce a
+    // new snapshot the moment the user changes the dropdown.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cluster?.id]);
 
   const insights: Insight[] = data ? runRules(data) : [];
   const criticalCount = insights.filter(i => i.level === 'critical').length;
@@ -129,7 +139,7 @@ export function Dashboard() {
             })}
           </div>
 
-          {activeTab === 'overview' && <OverviewTab data={data} history={history} capturedAt={capturedAt} refreshState={refreshState} />}
+          {activeTab === 'overview' && <OverviewTab data={data} history={history} capturedAt={capturedAt} refreshState={refreshState} cluster={cluster} onUpdateCluster={updateCluster} onClearCache={clearCache} />}
           {activeTab === 'collections' && <CollectionsTab data={data} insights={insights} cluster={cluster} onRefresh={refresh} onNavigateInsights={navigateToInsights} />}
           {activeTab === 'shards' && <ShardsTab data={data} />}
           {activeTab === 'optimizations' && <OptimizationsTab data={data} cluster={cluster} />}
