@@ -3,6 +3,12 @@
 body {
   min-height: 100dvh;
   padding: 24px 20px 40px;
+  /* Prevent page-level horizontal scroll. Inner scrollable regions
+     (e.g. .requests-table-wrap) stay scrollable because they create
+     their own scroll containers via `overflow-x: auto`. `clip` is
+     used over `hidden` so we don't accidentally make body a scroll
+     container, which would break sticky positioning. */
+  overflow-x: clip;
 }
 
 /* Theme toggle — 3-state cycle: system / dark / light */
@@ -82,6 +88,24 @@ header h1 {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Narrow viewports: stack title and actions vertically so refresh /
+   theme / GitHub buttons wrap below instead of overflowing. */
+@media (max-width: 720px) {
+  header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .header-left,
+  .header-right {
+    width: 100%;
+  }
+  .header-right {
+    justify-content: flex-start;
+  }
 }
 
 .version-badge {
@@ -2053,11 +2077,22 @@ header h1 {
   font-family: monospace;
 }
 
-/* Requests table */
+/* Requests table — fixed layout so long endpoint paths and timestamps
+   truncate with ellipsis instead of pushing the card past the viewport.
+   Wrapper allows horizontal scroll only when truly needed. */
+.requests-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
 .requests-table {
   width: 100%;
+  /* Minimum width keeps the endpoint column legible even on narrow
+     viewports; the wrapper scrolls horizontally below this threshold. */
+  min-width: 920px;
   border-collapse: collapse;
   font-size: 0.85rem;
+  table-layout: fixed;
 }
 
 .requests-table th {
@@ -2078,13 +2113,44 @@ header h1 {
   background: var(--overlay-1);
 }
 
+/* Column allocation. Widths declared on the header rows only — with
+   table-layout:fixed the first row drives every other row's columns.
+   Protocol needs ~96px so the "PROTOCOL" uppercase label doesn't
+   spill over into the Endpoint column. */
+.requests-table th:nth-child(1) { width: 96px; }
+.requests-table th:nth-child(3) { width: 76px; }
+.requests-table th:nth-child(4),
+.requests-table th:nth-child(5),
+.requests-table th:nth-child(6),
+.requests-table th:nth-child(7),
+.requests-table th:nth-child(8) { width: 88px; }
+.requests-table th:nth-child(9) { width: 160px; }
+
+.requests-table td.proto { font-size: 0.75rem; }
+
+/* Truncation is opt-in per cell — applied only to the columns that
+   carry long free-form strings, so the Status badge cell never gets
+   clipped or shows phantom ellipsis. */
+.requests-table .endpoint,
+.requests-table .last-response {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: help;
+}
+
 .requests-table .endpoint {
-  font-family: monospace;
+  font-family: var(--font-mono);
   color: var(--info);
 }
 
+.requests-table .last-response {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
 .requests-table .number {
-  font-family: monospace;
+  font-family: var(--font-mono);
   text-align: right;
 }
 
