@@ -49,19 +49,46 @@ function getVectorEntries(vectors: Record<string, VectorConfig> | VectorConfig):
   return [true, Object.values(vectors as Record<string, VectorConfig>)];
 }
 
+// Suggesting quantization is only useful when the raw vector footprint
+// is actually large enough that 4x compression matters. A small/medium
+// collection on a normal node fits in RAM with room to spare and the
+// operational cost of quantization (recall loss, oversampling tuning)
+// outweighs the saving. Trigger only when:
+//   1) Raw vector memory ≥ 1 GB, OR
+//   2) High-dimensional vectors (≥1024d) at moderate scale (≥500k points)
 registerRule('no-quantization', (ctx) => {
+  const RAW_MEMORY_MB = 1024;        // 1 GB before quantization is worth it
+  const HIGH_DIM = 1024;             // 1024d+ embeddings (e.g. OpenAI 1536d, 3072d)
+  const HIGH_DIM_POINTS = 500_000;   // moderate scale at high dimensionality
+
   const insights: Insight[] = [];
   for (const name of ctx.collections) {
     const info = ctx.collectionDetails[name]?.info;
     if (!info) continue;
-    const quant = info.config?.quantization_config;
+    if (info.config?.quantization_config) continue;
+
     const points = info.points_count || 0;
-    if (!quant && points > 10000) {
-      const [, entries] = getVectorEntries(info.config.params.vectors);
-      const totalDims = entries.reduce((sum, v) => sum + (v.size || 0), 0);
-      const estMemMB = Math.round((points * totalDims * 4) / (1024 * 1024));
-      insights.push({ level: 'performance', category: 'config', collection: name, title: 'Quantization not enabled', detail: `With ${formatNumber(points)} points and ${totalDims}d total dimensions, estimated raw vector memory is ~${formatNumber(estMemMB)} MB. Scalar quantization (int8) can reduce this by 4x.` });
-    }
+    if (points === 0) continue;
+    const [, entries] = getVectorEntries(info.config.params.vectors);
+    const totalDims = entries.reduce((sum, v) => sum + (v.size || 0), 0);
+    if (totalDims === 0) continue;
+
+    const estMemMB = Math.round((points * totalDims * 4) / (1024 * 1024));
+    const triggerByMemory = estMemMB >= RAW_MEMORY_MB;
+    const triggerByHighDim = totalDims >= HIGH_DIM && points >= HIGH_DIM_POINTS;
+    if (!triggerByMemory && !triggerByHighDim) continue;
+
+    const detail = triggerByMemory
+      ? `Estimated raw vector memory is ~${formatNumber(estMemMB)} MB across ${formatNumber(points)} points × ${totalDims}d. Scalar quantization (int8) cuts this by ~4x and helps keep vectors RAM-resident.`
+      : `${formatNumber(points)} points × ${totalDims}d (high-dimensional). Per-vector cost is large; scalar quantization (int8) cuts memory by ~4x with modest recall loss.`;
+
+    insights.push({
+      level: 'performance',
+      category: 'config',
+      collection: name,
+      title: 'Consider quantization',
+      detail,
+    });
   }
   return insights;
 });

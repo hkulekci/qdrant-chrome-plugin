@@ -98,12 +98,20 @@ registerRule('shard-recovery-in-progress', (ctx) => {
   return insights;
 });
 
-// Rule: All segments in a shard are plain (none indexed)
+// Rule: All segments in a shard are plain (none indexed).
+// Skipped when the collection has fewer points than its indexing
+// threshold — in that case no segment is supposed to build an HNSW
+// index yet, so a plain shard is expected, not a problem.
 registerRule('all-segments-plain', (ctx) => {
   const insights: Insight[] = [];
   const checked = new Set<string>();
   for (const [peerId, nodeTel] of allNodeTelemetries(ctx)) {
     for (const coll of (nodeTel?.collections?.collections || [])) {
+      const collInfo = ctx.collectionDetails[coll.id]?.info;
+      const collectionPoints = collInfo?.points_count ?? 0;
+      const indexingThreshold = collInfo?.config?.optimizer_config?.indexing_threshold ?? 20000;
+      if (collectionPoints < indexingThreshold) continue;
+
       for (const shard of (coll.shards || [])) {
         const key = `${coll.id}-${shard.id}`;
         if (checked.has(key)) continue;
@@ -114,7 +122,7 @@ registerRule('all-segments-plain', (ctx) => {
         if (totalPoints === 0) continue;
         const allPlain = segments.every(s => s.info.num_indexed_vectors === 0);
         if (allPlain) {
-          insights.push({ level: 'warning' as const, category: 'optimizer', collection: coll.id, shard: shard.id, node: peerId, title: `Shard ${shard.id}: no indexed segments`, detail: `All ${segments.length} segment(s) with ${totalPoints.toLocaleString()} points are plain (not indexed). Search will use brute-force scan. This may indicate the indexing threshold has not been reached or the optimizer is stuck.` });
+          insights.push({ level: 'warning' as const, category: 'optimizer', collection: coll.id, shard: shard.id, node: peerId, title: `Shard ${shard.id}: no indexed segments`, detail: `All ${segments.length} segment(s) with ${totalPoints.toLocaleString()} points are plain (not indexed). Search will use brute-force scan. This may indicate the optimizer is stuck.` });
         }
       }
     }
