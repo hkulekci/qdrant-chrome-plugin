@@ -1914,10 +1914,7 @@ header h1 {
 }
 
 .seg-popup {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
+  position: fixed;
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);

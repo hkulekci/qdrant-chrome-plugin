@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type { DashboardData, TelemetrySegment, TelemetryLocalShard, Telemetry, PeerMapping } from '../../lib/types';
 import { formatNumber, formatBytes } from '../../lib/format';
 import { buildPeerMapping } from '../../lib/peer-mapping';
@@ -39,11 +40,49 @@ function SegmentBox({ seg, popupId, activePopup, setActivePopup }: {
   const payloadType = cfg.payload_storage_type?.type || '';
 
   const isOpen = activePopup === popupId;
+  const boxRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number; placement: 'above' | 'below' } | null>(null);
+
+  // Position the portal-rendered popup near the box, flipping if it would overflow.
+  useLayoutEffect(() => {
+    if (!isOpen) { setPos(null); return; }
+    const place = () => {
+      const box = boxRef.current?.getBoundingClientRect();
+      const popup = popupRef.current?.getBoundingClientRect();
+      if (!box) return;
+      const margin = 8;
+      const popupH = popup?.height ?? 200;
+      const popupW = popup?.width ?? 240;
+      const aboveTop = box.top - popupH - margin;
+      const placement: 'above' | 'below' = aboveTop >= 8 ? 'above' : 'below';
+      const top = placement === 'above' ? aboveTop : box.bottom + margin;
+      let left = box.left + box.width / 2 - popupW / 2;
+      left = Math.max(8, Math.min(left, window.innerWidth - popupW - 8));
+      setPos({ left, top, placement });
+    };
+    place();
+    // Re-measure once the popup has rendered (so popup.height is accurate).
+    const raf = requestAnimationFrame(place);
+    const onScrollResize = () => setActivePopup(null);
+    window.addEventListener('scroll', onScrollResize, true);
+    window.addEventListener('resize', onScrollResize);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', onScrollResize, true);
+      window.removeEventListener('resize', onScrollResize);
+    };
+  }, [isOpen, setActivePopup]);
 
   return (
-    <div className="seg-box" style={{ background: bgColor, borderColor }} onClick={e => { e.stopPropagation(); setActivePopup(isOpen ? null : popupId); }}>
-      {isOpen && (
-        <div className="seg-popup" onClick={e => e.stopPropagation()}>
+    <div ref={boxRef} className="seg-box" style={{ background: bgColor, borderColor }} onClick={e => { e.stopPropagation(); setActivePopup(isOpen ? null : popupId); }}>
+      {isOpen && createPortal(
+        <div
+          ref={popupRef}
+          className="seg-popup"
+          style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999, visibility: pos ? 'visible' : 'hidden' }}
+          onClick={e => e.stopPropagation()}
+        >
           <div className="seg-popup-title">{sType}</div>
           <div className="seg-popup-row">Appendable: {isAppendable ? <span style={{ color: 'var(--success)' }}>yes</span> : 'no'}</div>
           <div className="seg-popup-row">Points: {formatNumber(info.num_points)}</div>
@@ -53,7 +92,8 @@ function SegmentBox({ seg, popupId, activePopup, setActivePopup }: {
           {storageTypes.length > 0 && <div className="seg-popup-row">Storage: {storageTypes.join(', ')}</div>}
           {indexTypes.length > 0 && <div className="seg-popup-row">Index: {indexTypes.join(', ')}</div>}
           {payloadType && <div className="seg-popup-row">Payload storage: {payloadType}</div>}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
