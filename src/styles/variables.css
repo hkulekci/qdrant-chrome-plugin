@@ -138,8 +138,6 @@ code, kbd, samp, pre,
 .raft-item .value,
 .shard-dist-stat-value,
 .requests-table .number,
-.opt-progress-numbers,
-.opt-task-duration,
 .version-badge,
 .cluster-item-url {
   font-variant-numeric: tabular-nums;

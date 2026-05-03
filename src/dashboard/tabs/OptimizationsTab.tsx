@@ -12,6 +12,55 @@ import { QdrantApi } from '../../lib/qdrant-api';
 
 const REFRESH_MS = 3000;
 
+type StageStatus = 'done' | 'running' | 'queued';
+
+function getStageStatus(p: OptimizationProgress): StageStatus {
+  if (!p.started_at) return 'queued';
+  if (p.finished_at) return 'done';
+  return 'running';
+}
+
+// Stage duration in milliseconds. For running stages use now - started_at.
+function stageDurationMs(p: OptimizationProgress, nowMs: number): number | null {
+  if (typeof p.duration_sec === 'number' && p.duration_sec > 0) return p.duration_sec * 1000;
+  if (!p.started_at) return null;
+  const started = Date.parse(p.started_at);
+  if (isNaN(started)) return null;
+  if (p.finished_at) {
+    const finished = Date.parse(p.finished_at);
+    return isNaN(finished) ? null : finished - started;
+  }
+  return Math.max(0, nowMs - started);
+}
+
+// Walk the tree and return the deepest currently-running leaf.
+function findCurrentStage(
+  p: OptimizationProgress,
+): OptimizationProgress | null {
+  const children = (p.children || []).filter(Boolean) as OptimizationProgress[];
+  for (const c of children) {
+    if (getStageStatus(c) === 'running') {
+      const deeper = findCurrentStage(c);
+      return deeper || c;
+    }
+  }
+  return getStageStatus(p) === 'running' ? p : null;
+}
+
+function shortUuid(uuid: string | undefined): string {
+  if (!uuid) return '';
+  if (uuid.length <= 12) return uuid;
+  return `${uuid.slice(0, 8)}…${uuid.slice(-4)}`;
+}
+
+function formatUtcTimestamp(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  // YYYY-MM-DD HH:mm:ss UTC
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} UTC`;
+}
+
 function SegmentChips({ segments }: { segments: OptimizationSegment[] }) {
   if (!segments?.length) return null;
   const shown = segments.slice(0, 4);
@@ -29,41 +78,125 @@ function SegmentChips({ segments }: { segments: OptimizationSegment[] }) {
   );
 }
 
-function ProgressBar({ progress, running }: { progress: OptimizationProgress; running: boolean }) {
-  const pct = progress.total > 0 ? Math.min(100, (progress.done / progress.total) * 100) : 0;
+// Recursive tree row for the stage timeline.
+function StageRow({ stage, depth, nowMs }: { stage: OptimizationProgress; depth: number; nowMs: number }) {
+  const status = getStageStatus(stage);
+  const durMs = stageDurationMs(stage, nowMs);
+  const hasTotal = typeof stage.total === 'number' && stage.total > 0;
+  const hasDoneOnly = !hasTotal && typeof stage.done === 'number' && stage.done > 0;
+  const pct = hasTotal ? (stage.done / stage.total) * 100 : 0;
+  const children = (stage.children || []).filter(Boolean) as OptimizationProgress[];
+  const displayName = stage.name && stage.name.length > 0 ? stage.name : '(unnamed)';
+  const isRoot = depth === 0;
+
   return (
-    <div className={`opt-progress ${running ? 'running' : 'done'}`}>
-      <div className="opt-progress-track">
-        <div className="opt-progress-fill" style={{ width: `${pct}%` }}>
-          {running && <span className="opt-progress-shine" />}
-        </div>
-      </div>
-      <div className="opt-progress-meta">
-        <span className="opt-progress-name">{progress.name || '—'}</span>
-        <span className="opt-progress-numbers">
-          {formatNumber(progress.done)} / {formatNumber(progress.total)} · {pct.toFixed(0)}%
+    <>
+      <div className={`opt-stage-row ${status}${isRoot ? ' root' : ''}`}>
+        <span className="opt-stage-indent" style={{ width: `${depth * 16}px` }} />
+        <span className={`opt-stage-icon ${status}`} aria-hidden>
+          {status === 'done' ? '✓' : status === 'running' ? '⏳' : '○'}
+        </span>
+        <span className={`opt-stage-name ${isRoot ? 'is-root' : ''}`}>{displayName}</span>
+        <span className="opt-stage-meta">
+          {hasTotal && (
+            <span className={`opt-stage-progress ${status === 'running' ? 'running' : ''}`}>
+              {formatNumber(stage.done)}/{formatNumber(stage.total)} ({pct.toFixed(1)}%)
+            </span>
+          )}
+          {hasDoneOnly && (
+            <span className={`opt-stage-progress ${status === 'running' ? 'running' : ''}`}>
+              {formatNumber(stage.done)} done
+            </span>
+          )}
+          {durMs != null ? (
+            <span className={`opt-stage-duration ${status}`}>{formatDuration(durMs)}</span>
+          ) : (
+            <span className="opt-stage-duration queued">queued</span>
+          )}
         </span>
       </div>
+      {children.map((c, i) => (
+        <StageRow key={`${c.name || ''}-${i}`} stage={c} depth={depth + 1} nowMs={nowMs} />
+      ))}
+    </>
+  );
+}
+
+function RunningTaskCard({ task, nowMs }: { task: OptimizationTask; nowMs: number }) {
+  const [timelineOpen, setTimelineOpen] = useState(true);
+  const root = task.progress;
+  const elapsedMs = stageDurationMs(root, nowMs);
+  const current = findCurrentStage(root);
+  const currentDurMs = current ? stageDurationMs(current, nowMs) : null;
+  const totalSegPts = (task.segments || []).reduce((s, x) => s + (x.points_count || 0), 0);
+  const segCount = task.segments?.length || 0;
+
+  return (
+    <div className="opt-task running">
+      <div className="opt-task-top">
+        <div className="opt-task-badges">
+          <span className="opt-badge optimizer">{task.optimizer}</span>
+          <span className="opt-badge status">{task.status}</span>
+        </div>
+        <span className="opt-task-uuid" title={task.uuid}>{shortUuid(task.uuid)}</span>
+      </div>
+
+      <div className="opt-task-meta">
+        {segCount === 1 ? (
+          <span><span className="m-label">Segment:</span> <span className="m-mono">{shortUuid(task.segments[0].uuid)}</span> ({formatNumber(task.segments[0].points_count)} pts)</span>
+        ) : segCount > 0 ? (
+          <span><span className="m-label">Segments:</span> {segCount} ({formatNumber(totalSegPts)} pts total)</span>
+        ) : null}
+        <span><span className="m-label">Total points:</span> <strong>{formatNumber(totalSegPts)}</strong></span>
+        {root?.started_at && <span><span className="m-label">Started:</span> {formatUtcTimestamp(root.started_at)}</span>}
+        {elapsedMs != null && <span><span className="m-label">Elapsed:</span> <strong>{formatDuration(elapsedMs)}</strong></span>}
+      </div>
+
+      {current && (
+        <div className="opt-current-banner">
+          <div className="opt-current-line">
+            <span className="opt-current-tag">CURRENT</span>
+            <span className="opt-current-name">{current.name || '(unnamed)'}</span>
+            <span className="opt-current-elapsed">{currentDurMs != null ? formatDuration(currentDurMs) : '—'} in stage</span>
+          </div>
+          {typeof current.done === 'number' && current.done > 0 && (
+            <div className="opt-current-sub">
+              {formatNumber(current.done)}{typeof current.total === 'number' && current.total > 0 ? `/${formatNumber(current.total)} (${((current.done / current.total) * 100).toFixed(1)}%)` : ' done so far'}
+            </div>
+          )}
+        </div>
+      )}
+
+      <button className="opt-timeline-toggle" onClick={() => setTimelineOpen(!timelineOpen)}>
+        <span className="opt-timeline-caret">{timelineOpen ? '◂' : '▸'}</span> Stage timeline
+      </button>
+      {timelineOpen && root && (
+        <div className="opt-stage-tree">
+          <StageRow stage={root} depth={0} nowMs={nowMs} />
+        </div>
+      )}
     </div>
   );
 }
 
-function TaskCard({ task, running }: { task: OptimizationTask; running: boolean }) {
+function CompletedTaskCard({ task }: { task: OptimizationTask }) {
   const duration = task.progress?.duration_sec ?? 0;
   const started = task.progress?.started_at ? new Date(task.progress.started_at).toLocaleTimeString() : '';
   const finished = task.progress?.finished_at ? new Date(task.progress.finished_at).toLocaleTimeString() : '';
   return (
-    <div className={`opt-task ${running ? 'running' : 'completed'}`}>
-      <div className="opt-task-header">
-        <span className="opt-task-optimizer">{task.optimizer}</span>
-        <span className={`opt-task-status ${task.status}`}>{running ? 'Running' : task.status}</span>
-        <span className="opt-task-duration">{formatDuration(duration * 1000)}</span>
+    <div className="opt-task completed">
+      <div className="opt-task-top">
+        <div className="opt-task-badges">
+          <span className="opt-badge optimizer">{task.optimizer}</span>
+          <span className="opt-badge status done">{task.status}</span>
+        </div>
+        <span className="opt-task-uuid" title={task.uuid}>{shortUuid(task.uuid)}</span>
       </div>
-      <ProgressBar progress={task.progress} running={running} />
-      <div className="opt-task-times">
-        {started && <span>Started: {started}</span>}
-        {finished && <span>Finished: {finished}</span>}
-        <span>{task.segments?.length || 0} segment{task.segments?.length === 1 ? '' : 's'}</span>
+      <div className="opt-task-meta">
+        {started && <span><span className="m-label">Started:</span> {started}</span>}
+        {finished && <span><span className="m-label">Finished:</span> {finished}</span>}
+        {duration > 0 && <span><span className="m-label">Duration:</span> <strong>{formatDuration(duration * 1000)}</strong></span>}
+        <span><span className="m-label">Segments:</span> {task.segments?.length || 0}</span>
       </div>
       <SegmentChips segments={task.segments} />
     </div>
@@ -94,7 +227,7 @@ function Section({ title, count, accent, defaultOpen, children }: { title: strin
   );
 }
 
-function CollectionOptimizationsCard({ name, data }: { name: string; data: CollectionOptimizations | null | { error: string } }) {
+function CollectionOptimizationsCard({ name, data, nowMs }: { name: string; data: CollectionOptimizations | null | { error: string }; nowMs: number }) {
   if (!data) {
     return (
       <div className="opt-collection-card loading-card">
@@ -156,7 +289,7 @@ function CollectionOptimizationsCard({ name, data }: { name: string; data: Colle
       {running.length > 0 && (
         <Section title="Running" count={running.length} accent="info" defaultOpen>
           <div className="opt-task-list">
-            {running.map((t) => <TaskCard key={t.uuid} task={t} running />)}
+            {running.map((t) => <RunningTaskCard key={t.uuid} task={t} nowMs={nowMs} />)}
           </div>
         </Section>
       )}
@@ -179,7 +312,7 @@ function CollectionOptimizationsCard({ name, data }: { name: string; data: Colle
       {completed.length > 0 && (
         <Section title="Completed" count={completed.length} accent="success" defaultOpen={false}>
           <div className="opt-task-list">
-            {completed.map((t) => <TaskCard key={t.uuid} task={t} running={false} />)}
+            {completed.map((t) => <CompletedTaskCard key={t.uuid} task={t} />)}
           </div>
         </Section>
       )}
@@ -201,7 +334,9 @@ export function OptimizationsTab({ data, cluster }: { data: DashboardData; clust
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [filter, setFilter] = useState<'all' | 'busy'>('all');
   const [lastFetched, setLastFetched] = useState<string>('');
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const timerRef = useRef<number | null>(null);
+  const tickRef = useRef<number | null>(null);
 
   const fetchAll = useCallback(async () => {
     if (!cluster || data.collections.length === 0) return;
@@ -238,6 +373,14 @@ export function OptimizationsTab({ data, cluster }: { data: DashboardData; clust
       if (timerRef.current) window.clearInterval(timerRef.current);
     };
   }, [autoRefresh, fetchAll]);
+
+  // 1s ticker so elapsed/in-stage durations feel live between fetches.
+  useEffect(() => {
+    tickRef.current = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => {
+      if (tickRef.current) window.clearInterval(tickRef.current);
+    };
+  }, []);
 
   const totalRunning = Object.values(optsByCollection).reduce((sum, d) => {
     if (!d || 'error' in d) return sum;
@@ -292,7 +435,7 @@ export function OptimizationsTab({ data, cluster }: { data: DashboardData; clust
         <div className="card"><p style={{ color: 'var(--text-secondary)' }}>No collections with active optimizations. Switch to "All" to see everything.</p></div>
       ) : (
         displayedCollections.map((name) => (
-          <CollectionOptimizationsCard key={name} name={name} data={optsByCollection[name] || null} />
+          <CollectionOptimizationsCard key={name} name={name} data={optsByCollection[name] || null} nowMs={nowMs} />
         ))
       )}
     </>
