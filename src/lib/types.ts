@@ -65,6 +65,8 @@ export interface CollectionParams {
   replication_factor: number;
   write_consistency_factor: number;
   on_disk_payload: boolean;
+  /** "auto" (default) or "custom" — the latter requires explicit shard_key per write/read. */
+  sharding_method?: 'auto' | 'custom';
 }
 
 export interface VectorConfig {
@@ -84,6 +86,9 @@ export interface HnswConfig {
   full_scan_threshold: number;
   max_indexing_threads: number;
   on_disk: boolean;
+  /** Per-tenant HNSW edges; non-zero means per-tenant sub-graphs are built
+   *  on top of (or instead of, when m=0) the global graph. */
+  payload_m?: number;
 }
 
 export interface OptimizerConfig {

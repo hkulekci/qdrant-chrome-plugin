@@ -2610,6 +2610,122 @@ header h1 {
   line-height: 1;
 }
 
+/* ─────────────────────────────────────────────
+ * Multi-tenancy badge + section
+ * Strategy tones:
+ *   optimal — is_tenant=true with HNSW tuned for tenants
+ *   partial — is_tenant=true but HNSW left at default
+ *   shard   — custom sharding without is_tenant
+ * ───────────────────────────────────────────── */
+.mt-row-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.65rem;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-family: monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-weight: 600;
+  background: var(--overlay-2);
+  color: var(--text-secondary);
+  border: 1px solid var(--overlay-2);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.mt-row-badge.mt-optimal {
+  background: rgba(74, 222, 128, 0.12);
+  color: var(--success);
+  border-color: rgba(74, 222, 128, 0.32);
+}
+.mt-row-badge.mt-partial {
+  background: rgba(251, 191, 36, 0.12);
+  color: var(--warning);
+  border-color: rgba(251, 191, 36, 0.32);
+}
+.mt-row-badge.mt-shard {
+  background: rgba(96, 165, 250, 0.12);
+  color: var(--info);
+  border-color: rgba(96, 165, 250, 0.32);
+}
+
+.mt-section {
+  margin: 12px 0 4px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--divider);
+  border-left: 3px solid var(--text-muted);
+}
+.mt-section.mt-section-optimal { border-left-color: var(--success); }
+.mt-section.mt-section-partial { border-left-color: var(--warning); }
+.mt-section.mt-section-shard { border-left-color: var(--info); }
+
+.mt-section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.mt-hybrid-pill {
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  background: rgba(167, 139, 250, 0.15);
+  color: #a78bfa;
+  border: 1px solid rgba(167, 139, 250, 0.3);
+}
+
+.mt-section-link {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.mt-section-link:hover { color: var(--text-primary); }
+
+.mt-section-desc {
+  margin: 8px 0 8px;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.mt-signal-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mt-signal {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: monospace;
+  background: var(--overlay-2);
+  color: var(--text-secondary);
+  border: 1px solid var(--overlay-2);
+}
+.mt-signal-good {
+  background: rgba(74, 222, 128, 0.1);
+  color: var(--success);
+  border-color: rgba(74, 222, 128, 0.28);
+}
+.mt-signal-warn {
+  background: rgba(251, 191, 36, 0.1);
+  color: var(--warning);
+  border-color: rgba(251, 191, 36, 0.28);
+}
+.mt-signal-info {
+  background: rgba(96, 165, 250, 0.1);
+  color: var(--info);
+  border-color: rgba(96, 165, 250, 0.28);
+}
+
 /* Ask AI button on each insight */
 .insight-ask-ai {
   align-self: center;

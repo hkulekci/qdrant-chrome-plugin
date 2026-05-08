@@ -6,6 +6,13 @@ import { insightsForCollection } from '../../rules';
 import { DEFAULTS, isNonDefault } from '../../lib/qdrant-defaults';
 import { QdrantApi } from '../../lib/qdrant-api';
 import { ConfirmDialog } from '../ConfirmDialog';
+import {
+  analyzeMultiTenancy,
+  strategyLabel,
+  strategyShortLabel,
+  strategyTone,
+  type MultiTenancyAnalysis,
+} from '../../lib/multi-tenancy';
 
 type SortKey = 'name' | 'points' | 'segments' | 'insights';
 
@@ -106,6 +113,16 @@ function OptimizerStatus({ status }: { status: string | { error: string } }) {
   return <>{String(status)}</>;
 }
 
+function MultiTenancyBadge({ mt }: { mt: MultiTenancyAnalysis }) {
+  if (mt.strategy === 'none') return null;
+  const tone = strategyTone(mt.strategy);
+  const label = strategyShortLabel(mt.strategy);
+  const titleParts: string[] = [strategyLabel(mt.strategy)];
+  if (mt.tenantFields.length > 0) titleParts.push(`tenant: ${mt.tenantFields.join(', ')}`);
+  if (mt.customSharding) titleParts.push('custom sharding');
+  return <span className={`mt-row-badge mt-${tone}`} title={titleParts.join(' · ')}>{label}</span>;
+}
+
 function InsightBadges({ insights, collectionName, onNavigate }: { insights: Insight[]; collectionName: string; onNavigate: (filter?: Partial<InsightsFilter>) => void }) {
   const c = insights.filter(i => i.level === 'critical').length;
   const w = insights.filter(i => i.level === 'warning').length;
@@ -144,6 +161,7 @@ function CollectionRow({
     ? `${denseNames.length} named`
     : `${(vectors as VectorConfig).size}d · ${(vectors as VectorConfig).distance}`;
   const statusColor = info.status === 'green' ? 'green' : info.status === 'yellow' ? 'yellow' : 'red';
+  const mt = analyzeMultiTenancy(info);
 
   return (
     <button
@@ -154,6 +172,7 @@ function CollectionRow({
     >
       <span className={`collection-row-status ${statusColor}`} title={`status: ${info.status || 'unknown'}`} />
       <span className="collection-row-name">{name}</span>
+      <MultiTenancyBadge mt={mt} />
       <span className="collection-row-metric primary">
         <span className="m-val">{formatNumber(info.points_count)}</span>
         <span className="m-label">points</span>
@@ -176,6 +195,77 @@ function CollectionRow({
   );
 }
 
+function MultiTenancySection({ mt }: { mt: MultiTenancyAnalysis }) {
+  if (mt.strategy === 'none') return null;
+  const tone = strategyTone(mt.strategy);
+  const label = strategyLabel(mt.strategy);
+
+  // Per-strategy human-friendly explanation. Kept short — full guidance is in
+  // the linked article. Reflects the structural signals only.
+  const description: string =
+    mt.strategy === 'payload-optimized'
+      ? 'Tenant-aware payload index with per-tenant HNSW sub-graphs. Filtered search hops within one tenant only.'
+      : mt.strategy === 'payload-tenant-flag'
+        ? 'Tenant-aware payload index detected, but HNSW is left at default. The global graph is still built across all tenants.'
+        : mt.strategy === 'custom-shard-optimized'
+          ? 'Custom sharding combined with a tenant-aware payload index. Two layers of isolation: shard routing + per-tenant graph.'
+          : 'Custom sharding without a tenant-aware payload index. Isolation is structural via shard_key only.';
+
+  // Build the optimization signal pills. Each pill conveys one structural fact.
+  const signals: { key: string; label: string; tone: 'good' | 'warn' | 'info' }[] = [];
+  if (mt.tenantFields.length > 0) {
+    signals.push({
+      key: 'is_tenant',
+      label: `is_tenant on ${mt.tenantFields.join(', ')}`,
+      tone: 'good',
+    });
+  }
+  if (mt.principalFields.length > 0) {
+    signals.push({
+      key: 'is_principal',
+      label: `is_principal on ${mt.principalFields.join(', ')}`,
+      tone: 'info',
+    });
+  }
+  if (mt.customSharding) {
+    signals.push({ key: 'sharding', label: 'sharding_method: custom', tone: 'info' });
+  }
+  if (mt.globalM === 0) {
+    signals.push({ key: 'm0', label: 'HNSW m: 0 (per-tenant only)', tone: 'good' });
+  } else if (mt.globalM != null) {
+    signals.push({ key: 'mn', label: `HNSW m: ${mt.globalM}`, tone: mt.payloadM ? 'info' : 'warn' });
+  }
+  if (mt.payloadM != null && mt.payloadM > 0) {
+    signals.push({ key: 'pm', label: `HNSW payload_m: ${mt.payloadM}`, tone: 'good' });
+  } else if (mt.tenantFields.length > 0) {
+    signals.push({ key: 'pm0', label: 'payload_m not set', tone: 'warn' });
+  }
+
+  return (
+    <div className={`mt-section mt-section-${tone}`}>
+      <div className="mt-section-head">
+        <span className={`mt-row-badge mt-${tone}`}>{label}</span>
+        {mt.hybridGraph && <span className="mt-hybrid-pill" title="Both global graph and per-tenant sub-graphs are built — supports cross-tenant search">hybrid graph</span>}
+        <a
+          className="mt-section-link"
+          href="https://qdrant.tech/articles/multitenancy/"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Qdrant Multi-tenancy article"
+        >
+          Learn more &rarr;
+        </a>
+      </div>
+      <p className="mt-section-desc">{description}</p>
+      <div className="mt-signal-list">
+        {signals.map(s => (
+          <span key={s.key} className={`mt-signal mt-signal-${s.tone}`}>{s.label}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function CollectionDetail({
   name, info, cluster, onOptimized,
 }: {
@@ -184,6 +274,7 @@ function CollectionDetail({
   cluster: ClusterConfig | null;
   onOptimized: () => void;
 }) {
+  const mt = analyzeMultiTenancy(info);
   const [showOptimize, setShowOptimize] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
   const [optimizeError, setOptimizeError] = useState<string | null>(null);
@@ -232,6 +323,7 @@ function CollectionDetail({
 
   return (
     <div className="collection-detail">
+      <MultiTenancySection mt={mt} />
       <div className="collection-detail-meta">
         <span className="meta-tag">
           <span className="label">Shards</span>
