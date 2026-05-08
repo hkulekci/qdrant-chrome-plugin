@@ -81,14 +81,17 @@ function ConfigRow({
   );
 }
 
-function ConfigSection({ title, icon, children, action }: {
+function ConfigSection({ title, icon, children, action, wide }: {
   title: string;
   icon?: ReactNode;
   children: ReactNode;
   action?: ReactNode;
+  /** Span two grid columns. Useful for sections with wide rows (long
+   *  field names + multiple flag pills) that wrap awkwardly otherwise. */
+  wide?: boolean;
 }) {
   return (
-    <div className="config-section">
+    <div className={`config-section${wide ? ' config-section-wide' : ''}`}>
       <div className="config-section-header">
         <h3>
           {icon && <span className="config-section-icon" aria-hidden>{icon}</span>}
@@ -556,6 +559,7 @@ function CollectionDetail({
         <ConfigSection
           title={`Payload indexes${payloadEntries.length > 0 ? ` (${payloadEntries.length})` : ''}`}
           icon="&#x25A7;"
+          wide
         >
           {payloadEntries.length > 0 ? (
             <div className="payload-index-list">

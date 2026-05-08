@@ -1512,6 +1512,12 @@ header h1 {
   margin-top: 14px;
 }
 
+/* Sections with wide rows (e.g. payload indexes — long field names plus
+ * several flag pills) span two columns whenever the grid has at least two. */
+.config-section.config-section-wide {
+  grid-column: span 2;
+}
+
 .config-section {
   background: var(--bg-card);
   border: 1px solid var(--border);
