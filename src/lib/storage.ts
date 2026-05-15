@@ -11,7 +11,20 @@ import { STORAGE_BUDGET_BYTES } from './cache-config';
 const SNAPSHOT_PREFIX = 'dashboardSnapshot:';
 const REFRESH_STATE_PREFIX = 'clusterRefreshState:';
 const HISTORY_PREFIX = 'metricsHistory:';
+const UPGRADE_PROGRESS_PREFIX = 'upgradeProgress:';
 const MAX_HISTORY_SAMPLES = 288;
+
+/**
+ * Stored manual checkmarks for the Upgrade tab. Each entry is scoped to the
+ * *target* version — when maintainers bump LATEST_KNOWN_VERSION the previous
+ * checkboxes are no longer relevant and the UI starts from a clean slate.
+ *
+ *   items["1.12.3->1.12.9"]["triggered"] = true
+ */
+export interface UpgradeProgress {
+  targetVersion: string;
+  items: Record<string, Record<string, boolean>>;
+}
 
 function jsonByteSize(value: unknown): number {
   return new Blob([JSON.stringify(value)]).size;
@@ -54,7 +67,28 @@ export async function removeCluster(id: string): Promise<void> {
     `${SNAPSHOT_PREFIX}${id}`,
     `${REFRESH_STATE_PREFIX}${id}`,
     `${HISTORY_PREFIX}${id}`,
+    `${UPGRADE_PROGRESS_PREFIX}${id}`,
   ]);
+}
+
+/**
+ * Read the upgrade checklist state for a cluster, scoped to the current
+ * target version. If the stored target differs from `targetVersion`, returns
+ * an empty progress object (and lets the next save overwrite it) — a target
+ * bump invalidates the previous progress.
+ */
+export async function getUpgradeProgress(clusterId: string, targetVersion: string): Promise<UpgradeProgress> {
+  const key = `${UPGRADE_PROGRESS_PREFIX}${clusterId}`;
+  const data = await chrome.storage.local.get(key) as Record<string, UpgradeProgress | undefined>;
+  const stored = data[key];
+  if (!stored || stored.targetVersion !== targetVersion) {
+    return { targetVersion, items: {} };
+  }
+  return stored;
+}
+
+export async function setUpgradeProgress(clusterId: string, progress: UpgradeProgress): Promise<void> {
+  await chrome.storage.local.set({ [`${UPGRADE_PROGRESS_PREFIX}${clusterId}`]: progress });
 }
 
 export async function getDashboardSnapshot(clusterId: string): Promise<CachedDashboardSnapshot | null> {
@@ -87,6 +121,8 @@ export async function setClusterRefreshState(state: ClusterRefreshState): Promis
  * refresh right after to repopulate.
  */
 export async function clearClusterCache(clusterId: string): Promise<void> {
+  // Upgrade checklist state is user-driven, not cached telemetry — leave it
+  // alone here. It's cleared on cluster removal and on target-version change.
   await chrome.storage.local.remove([
     `${SNAPSHOT_PREFIX}${clusterId}`,
     `${REFRESH_STATE_PREFIX}${clusterId}`,

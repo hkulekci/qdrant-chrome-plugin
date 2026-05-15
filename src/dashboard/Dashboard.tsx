@@ -13,12 +13,15 @@ import { ClusterTab } from './tabs/ClusterTab';
 import { RequestsTab } from './tabs/RequestsTab';
 import { OptimizationsTab } from './tabs/OptimizationsTab';
 import { InsightsTab } from './tabs/InsightsTab';
+import { UpgradeTab } from './tabs/UpgradeTab';
 import { UpdateBanner } from '../components/UpdateBanner';
 import { ThemeToggle } from '../components/ThemeToggle';
+import { LATEST_KNOWN_VERSION } from '../lib/qdrant-versions';
+import { compareVersions, parseVersion } from '../lib/upgrade-planner';
 
-type TabName = 'overview' | 'collections' | 'shards' | 'optimizations' | 'transfers' | 'cluster' | 'requests' | 'insights';
+type TabName = 'overview' | 'collections' | 'shards' | 'optimizations' | 'transfers' | 'cluster' | 'requests' | 'insights' | 'upgrade';
 
-const TABS: { key: TabName; label: string }[] = [
+const BASE_TABS: { key: TabName; label: string }[] = [
   { key: 'overview', label: 'Overview' },
   { key: 'collections', label: 'Collections' },
   { key: 'shards', label: 'Shard Distribution' },
@@ -75,6 +78,19 @@ export function Dashboard() {
   const nodeCount = Object.keys(data?.nodeTelemetry || {}).length;
   const totalPeers = data?.cluster?.peers ? Object.keys(data.cluster.peers).length : 1;
   const lastUpdated = capturedAt ? new Date(capturedAt).toLocaleTimeString() : '';
+
+  // Surface the Upgrade tab only when the cluster is behind the latest
+  // version the plugin knows about. Slotted right after Cluster so users
+  // looking at version info find it naturally.
+  const upgradeAvailable =
+    !!version && !!parseVersion(version) && compareVersions(version, LATEST_KNOWN_VERSION) < 0;
+  const TABS = upgradeAvailable
+    ? [
+        ...BASE_TABS.slice(0, 6),
+        { key: 'upgrade' as TabName, label: 'Upgrade' },
+        ...BASE_TABS.slice(6),
+      ]
+    : BASE_TABS;
 
   if (!cluster) {
     return <div className="container"><div className="error-box">No cluster specified. Open a cluster from the popup.</div></div>;
@@ -146,6 +162,7 @@ export function Dashboard() {
           {activeTab === 'transfers' && <TransfersTab data={data} />}
           {activeTab === 'cluster' && <ClusterTab data={data} />}
           {activeTab === 'requests' && <RequestsTab data={data} />}
+          {activeTab === 'upgrade' && <UpgradeTab data={data} cluster={cluster} />}
           {activeTab === 'insights' && <InsightsTab insights={insights} filter={insightsFilter} onFilterChange={setInsightsFilter} collections={data.collections} data={data} />}
         </>
       )}

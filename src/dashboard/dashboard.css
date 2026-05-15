@@ -3701,3 +3701,301 @@ header h1 {
     justify-content: space-between;
   }
 }
+
+/* ──────────────────────────────────────────────
+ * Upgrade tab
+ * Surfaced from Dashboard.tsx only when the cluster is on an older
+ * version than LATEST_KNOWN_VERSION. Layout mirrors the upstream
+ * upgrade-guide mockup (header → readiness → path → step list →
+ * monitoring tips).
+ * ────────────────────────────────────────────── */
+.upgrade-header { padding-bottom: 0.5rem; }
+.upgrade-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.upgrade-header-sub {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+}
+.upgrade-header-meta {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 2px 12px;
+  font-size: 0.75rem;
+}
+.upgrade-header-meta-label { color: var(--text-muted); }
+.upgrade-header-meta-value {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+.upgrade-banner {
+  margin-top: 12px;
+  padding: 9px 14px;
+  border-radius: 6px;
+  font-size: 0.86rem;
+  border-left: 3px solid;
+}
+.upgrade-banner-fail {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--error);
+  border-color: var(--error);
+}
+.upgrade-banner-warn {
+  background: rgba(251, 191, 36, 0.1);
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.upgrade-section h2 { margin-bottom: 4px; }
+.upgrade-section-sub {
+  margin: 0 0 14px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+/* Readiness rows */
+.upgrade-readiness-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.upgrade-readiness-row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  border-left: 3px solid var(--text-muted);
+}
+.upgrade-readiness-row.level-pass { border-left-color: var(--success); }
+.upgrade-readiness-row.level-warn { border-left-color: var(--warning); }
+.upgrade-readiness-row.level-fail { border-left-color: var(--error); }
+.upgrade-readiness-row.level-info { border-left-color: var(--info); }
+
+.upgrade-readiness-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.level-pass .upgrade-readiness-icon { background: rgba(74, 222, 128, 0.15); color: var(--success); }
+.level-warn .upgrade-readiness-icon { background: rgba(251, 191, 36, 0.15); color: var(--warning); }
+.level-fail .upgrade-readiness-icon { background: rgba(239, 68, 68, 0.15); color: var(--error); }
+.level-info .upgrade-readiness-icon { background: rgba(96, 165, 250, 0.15); color: var(--info); }
+
+.upgrade-readiness-title {
+  font-weight: 500;
+  font-size: 0.92rem;
+  color: var(--text-primary);
+}
+.upgrade-readiness-detail {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: 1px;
+  line-height: 1.45;
+}
+.upgrade-readiness-value {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.upgrade-readiness-link {
+  color: var(--info);
+  text-decoration: none;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.upgrade-readiness-link:hover {
+  text-decoration: underline;
+}
+
+/* Version path — horizontal flow, wraps on narrow screens. The per-step
+ * note becomes a tooltip on the destination chip; chip color encodes
+ * whether the stop is the final target. */
+.upgrade-path-horizontal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  row-gap: 10px;
+}
+.upgrade-path-arrow {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  line-height: 1;
+}
+
+.upgrade-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 500;
+  background: var(--overlay-2);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.upgrade-chip-current {
+  background: rgba(74, 222, 128, 0.12);
+  color: var(--success);
+  border-color: rgba(74, 222, 128, 0.32);
+}
+.upgrade-chip-target {
+  background: rgba(167, 139, 250, 0.15);
+  color: #a78bfa;
+  border-color: rgba(167, 139, 250, 0.32);
+}
+
+/* Step cards */
+.upgrade-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.upgrade-step {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: var(--bg-card);
+  transition: border-color var(--dur) var(--ease-out);
+}
+.upgrade-step-done {
+  border-color: rgba(74, 222, 128, 0.3);
+  background: rgba(74, 222, 128, 0.04);
+}
+.upgrade-step-active {
+  border-color: var(--info);
+  box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.18);
+}
+.upgrade-step-pending { opacity: 0.75; }
+
+.upgrade-step-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.upgrade-step-number {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.upgrade-step-versions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.upgrade-step-status {
+  margin-left: auto;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+.upgrade-step-status.status-done {
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--success);
+}
+.upgrade-step-status.status-active {
+  background: rgba(96, 165, 250, 0.15);
+  color: var(--info);
+}
+.upgrade-step-status.status-pending {
+  background: var(--overlay-2);
+  color: var(--text-muted);
+}
+
+.upgrade-step-checklist {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.upgrade-step-checklist li {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 4px;
+  border-radius: 4px;
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+}
+.upgrade-step-checklist li:not(.auto) {
+  cursor: pointer;
+  user-select: none;
+}
+.upgrade-step-checklist li:not(.auto):hover {
+  background: var(--overlay-1);
+  color: var(--text-primary);
+}
+.upgrade-step-checklist li.checked {
+  color: var(--text-primary);
+}
+.upgrade-check {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--success);
+  background: transparent;
+}
+.upgrade-step-checklist li.checked .upgrade-check {
+  background: rgba(74, 222, 128, 0.18);
+  border-color: rgba(74, 222, 128, 0.4);
+}
+.upgrade-check-tag {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.upgrade-monitor-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+.upgrade-monitor-list strong { color: var(--text-primary); }
+
+@media (max-width: 768px) {
+  .upgrade-header-top { flex-direction: column; }
+  .upgrade-readiness-row { grid-template-columns: 22px 1fr; }
+  .upgrade-readiness-value {
+    grid-column: 2 / -1;
+    margin-top: 2px;
+  }
+}
