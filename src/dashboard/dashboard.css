@@ -2089,6 +2089,95 @@ header h1 {
   font-family: monospace;
 }
 
+/* Each side of a transfer arrow shows the friendly node label stacked over
+   the raw peer_id, so users can copy the exact id into a restart request. */
+.peer-endpoint {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
+}
+
+.peer-endpoint .peer-label {
+  font-weight: 600;
+}
+
+.peer-endpoint .peer-id {
+  font-family: monospace;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+/* Collapsible "Restart as snapshot" helper under each transfer. */
+.transfer-restart {
+  margin-top: 8px;
+}
+
+.transfer-restart > summary {
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--info);
+  user-select: none;
+}
+
+.transfer-restart-hint {
+  margin: 6px 0;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+/* Copyable recovery request shown under an insight. */
+.insight-code {
+  margin-top: 8px;
+}
+
+.insight-code > summary {
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--info);
+  user-select: none;
+}
+
+.insight-code .code-block {
+  margin-top: 6px;
+}
+
+/* Copyable code block with a floating Copy button. */
+.code-block {
+  position: relative;
+  background: var(--overlay-1);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.code-block pre {
+  margin: 0;
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 3px 10px;
+  font-size: 0.72rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.copy-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--info);
+}
+
 /* Requests table — fixed layout so long endpoint paths and timestamps
    truncate with ellipsis instead of pushing the card past the viewport.
    Wrapper allows horizontal scroll only when truly needed. */

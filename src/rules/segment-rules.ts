@@ -75,7 +75,21 @@ registerRule('replica-not-active', (ctx) => {
           if (checked.has(key)) continue;
           checked.add(key);
           if (state !== 'Active') {
-            insights.push({ level: state === 'Dead' ? 'critical' as const : 'warning' as const, category: 'replication', collection: coll.id, shard: shard.id, node: rpId, title: `Replica ${state} for shard ${shard.id}`, detail: `Peer ${rpId} replica is in "${state}" state. Replication may be degraded.` });
+            const insight: Insight = { level: state === 'Dead' ? 'critical' as const : 'warning' as const, category: 'replication', collection: coll.id, shard: shard.id, node: rpId, title: `Replica ${state} for shard ${shard.id}`, detail: `Peer ${rpId} replica is in "${state}" state. Replication may be degraded.` };
+            // If a healthy replica exists on another peer, offer a copyable
+            // replicate_shard request so the user can recover the dead replica.
+            // The healthy peer is the source (from_peer_id); the unhealthy one
+            // is the destination (to_peer_id). Peer ids are kept as their raw
+            // digit strings so large (>2^53) ids stay exact in the JSON.
+            const healthyPeer = Object.entries(shard.replicate_states || {})
+              .find(([pid, st]) => st === 'Active' && pid !== rpId);
+            if (healthyPeer) {
+              insight.code = {
+                title: 'Recover this replica',
+                body: `POST /collections/${coll.id}/cluster\n{\n  "replicate_shard": {\n    "from_peer_id": ${healthyPeer[0]},\n    "to_peer_id": ${rpId},\n    "shard_id": ${shard.id},\n    "method": "snapshot"\n  }\n}`,
+              };
+            }
+            insights.push(insight);
           }
         }
       }

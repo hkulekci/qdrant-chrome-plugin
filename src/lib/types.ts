@@ -398,6 +398,9 @@ export interface Insight {
   collection?: string;
   shard?: number;
   node?: string;
+  /** Optional copyable REST request that helps the user act on the insight
+   *  (e.g. a `replicate_shard` call to recover a dead replica). */
+  code?: { title: string; body: string };
 }
 
 export type RuleFunction = (ctx: DashboardData) => Insight[];

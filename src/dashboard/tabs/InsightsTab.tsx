@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { Insight, InsightLevel, InsightsFilter, DashboardData } from '../../lib/types';
 import { DEFAULT_INSIGHTS_FILTER } from '../../lib/types';
 import { AskAIDialog } from '../AskAIDialog';
+import { CopyButton } from '../CopyButton';
 
 const ICONS: Record<InsightLevel, string> = {
   critical: '\u26d4',
@@ -31,6 +32,15 @@ function InsightItem({ insight, onAsk }: { insight: Insight; onAsk: (ins: Insigh
           <span className={`insight-category-badge ${insight.category}`}>{insight.category}</span>
         </div>
         <div className="insight-detail">{insight.detail}</div>
+        {insight.code && (
+          <details className="insight-code">
+            <summary>{insight.code.title}</summary>
+            <div className="code-block">
+              <CopyButton text={insight.code.body} />
+              <pre>{insight.code.body}</pre>
+            </div>
+          </details>
+        )}
       </div>
       <button
         className="insight-ask-ai"
