@@ -53,6 +53,10 @@ export function TransfersTab({ data }: { data: DashboardData }) {
           <p style={{ color: 'var(--text-secondary)' }}>No active shard transfers.</p>
         ) : (
           transfers.map((t, i) => {
+            // Restarting as a snapshot only helps a `stream_records` sync that
+            // is stuck or slow. It is pointless when the transfer is already a
+            // `snapshot`, and not applicable to `wal_delta`.
+            const canRestartAsSnapshot = t.method === 'stream_records';
             const req = restartRequest(t);
             return (
               <div key={i} className="transfer-card">
@@ -74,17 +78,19 @@ export function TransfersTab({ data }: { data: DashboardData }) {
                   {t.sync && <span className="status-badge green">sync</span>}
                 </div>
                 {t.comment && <div className="transfer-comment">{t.comment}</div>}
-                <details className="transfer-restart">
-                  <summary>Restart as snapshot</summary>
-                  <p className="transfer-restart-hint">
-                    Copy and send this to the Qdrant REST API to restart the transfer using the
-                    snapshot method — useful when a stream sync is stuck or slow.
-                  </p>
-                  <div className="code-block">
-                    <CopyButton text={req} />
-                    <pre>{req}</pre>
-                  </div>
-                </details>
+                {canRestartAsSnapshot && (
+                  <details className="transfer-restart">
+                    <summary>Restart as snapshot</summary>
+                    <p className="transfer-restart-hint">
+                      Copy and send this to the Qdrant REST API to restart the transfer using the
+                      snapshot method — useful when a stream sync is stuck or slow.
+                    </p>
+                    <div className="code-block">
+                      <CopyButton text={req} />
+                      <pre>{req}</pre>
+                    </div>
+                  </details>
+                )}
               </div>
             );
           })
