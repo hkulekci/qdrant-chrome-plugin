@@ -104,6 +104,13 @@ git push origin v0.1.0
 
 This creates a GitHub Release with a `.zip` file ready for Chrome Web Store upload.
 
+## Credits
+
+The **Visualizer** tab reconstructs and animates an HNSW graph from real
+collection vectors. Its graph engine and Canvas renderer are adapted from
+[VectorLens — HNSW Vector Search Visualizer](https://github.com/ManikBodamwad/HNSW_Vector_Search_Visualizer)
+by Manik Bodamwad (MIT). See [NOTICE](NOTICE) for the full attribution.
+
 ## License
 
 Apache License 2.0

@@ -8,6 +8,20 @@ import type {
   QdrantResponse,
 } from './types';
 
+/** Pull a plain number[] out of a scroll point's `vector`, which can be a bare
+ *  array (unnamed vector), a map of named vectors, or contain sparse entries. */
+function extractDenseVector(vector: unknown, preferredName?: string): number[] | null {
+  if (Array.isArray(vector) && typeof vector[0] === 'number') return vector as number[];
+  if (vector && typeof vector === 'object') {
+    const map = vector as Record<string, unknown>;
+    if (preferredName && Array.isArray(map[preferredName])) return map[preferredName] as number[];
+    for (const val of Object.values(map)) {
+      if (Array.isArray(val) && typeof val[0] === 'number') return val as number[];
+    }
+  }
+  return null;
+}
+
 export class QdrantApi {
   private baseUrl: string;
   private apiKey: string;
@@ -80,6 +94,28 @@ export class QdrantApi {
   async getTelemetry(): Promise<Telemetry> {
     const data = await this._fetch<QdrantResponse<Telemetry>>('/telemetry?details_level=10');
     return data.result;
+  }
+
+  // Sample points (with their dense vectors) for the HNSW visualizer. Qdrant
+  // does not expose its internal graph edges, so the visualizer reconstructs a
+  // graph client-side from these real vectors.
+  async scrollPoints(
+    name: string,
+    opts: { limit: number; vectorName?: string },
+  ): Promise<{ id: string | number; vector: number[] }[]> {
+    const withVector = opts.vectorName ? [opts.vectorName] : true;
+    const data = await this._request<QdrantResponse<{ points: { id: string | number; vector: unknown }[] }>>(
+      'POST',
+      `/collections/${encodeURIComponent(name)}/points/scroll`,
+      { limit: opts.limit, with_vector: withVector, with_payload: false },
+    );
+
+    const out: { id: string | number; vector: number[] }[] = [];
+    for (const p of data.result.points || []) {
+      const vec = extractDenseVector(p.vector, opts.vectorName);
+      if (vec) out.push({ id: p.id, vector: vec });
+    }
+    return out;
   }
 
   async getCollectionOptimizations(name: string): Promise<CollectionOptimizations> {
