@@ -4,7 +4,7 @@ import { QdrantApi } from '../../lib/qdrant-api';
 import { buildVizGraph, type VizGraph } from '../../lib/hnsw';
 import { VisualizerCanvas } from '../viz/VisualizerCanvas';
 
-const MAX_SAMPLE = 800;
+const MAX_SAMPLE = 2000;
 
 /** List named dense vectors for a collection, or [undefined] for a single
  *  unnamed vector, plus the per-name HNSW params. */
