@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ClusterConfig, DashboardData, VectorConfig } from '../../lib/types';
 import { QdrantApi } from '../../lib/qdrant-api';
 import { buildVizGraph, type VizGraph } from '../../lib/hnsw';
@@ -29,6 +29,23 @@ export function VisualizerTab({ data, cluster }: { data: DashboardData; cluster:
   const vecOpts = useMemo(() => vectorOptions(info?.config?.params?.vectors), [info]);
   const pointCount = info?.points_count;
 
+  // The collection's real HNSW params for the chosen vector — used as the
+  // starting point, but the user can override them to see the speed effect.
+  const collHnsw = useMemo(() => {
+    const chosen = vecOpts.find(v => v.name === vectorName);
+    return chosen?.cfg?.hnsw_config ?? info?.config?.hnsw_config;
+  }, [vecOpts, vectorName, info]);
+
+  const [m, setM] = useState(16);
+  const [efConstruct, setEfConstruct] = useState(100);
+
+  // Reset the overrides to the collection's real values whenever the selected
+  // collection/vector changes.
+  useEffect(() => {
+    setM(collHnsw?.m ?? 16);
+    setEfConstruct(collHnsw?.ef_construct ?? 100);
+  }, [collHnsw]);
+
   const build = async () => {
     setError(null);
     setLoading(true);
@@ -40,12 +57,9 @@ export function VisualizerTab({ data, cluster }: { data: DashboardData; cluster:
         throw new Error('No dense vectors returned. The collection may be empty, store vectors on disk without returning them, or use only sparse vectors.');
       }
 
-      // Prefer the selected vector's HNSW params, falling back to the global config.
-      const chosen = vecOpts.find(v => v.name === vectorName);
-      const hnsw = chosen?.cfg?.hnsw_config ?? info?.config?.hnsw_config;
       const built = buildVizGraph(
         points.map(p => ({ pointId: p.id, vector: p.vector })),
-        { m: hnsw?.m, efConstruction: hnsw?.ef_construct, seed: 1 },
+        { m, efConstruction: efConstruct, seed: 1 },
       );
       setGraph(built);
       setBuildToken(t => t + 1);
@@ -61,10 +75,11 @@ export function VisualizerTab({ data, cluster }: { data: DashboardData; cluster:
       <div className="card">
         <h2>HNSW Visualizer</h2>
         <p style={{ color: 'var(--text-secondary)', marginTop: 0 }}>
-          Samples real vectors from a collection and reconstructs an HNSW graph client-side using that
-          collection's own <code>m</code> / <code>ef_construct</code>, then animates a nearest-neighbour
-          search over it. Qdrant does not expose its internal graph edges, so this is an independent
-          reconstruction — same algorithm, same parameters, same vectors.
+          Samples real vectors from a collection and reconstructs an HNSW graph client-side, then animates
+          a nearest-neighbour search over it. <code>m</code> and <code>ef_construct</code> default to the
+          collection's own values but are editable — change them and rebuild to watch how they affect search
+          cost (the <b>Evaluated</b> count and the number of edges lit up per hop). Qdrant does not expose its
+          internal graph edges, so this is an independent reconstruction — same algorithm, same vectors.
         </p>
 
         <div className="viz-form">
@@ -89,6 +104,22 @@ export function VisualizerTab({ data, cluster }: { data: DashboardData; cluster:
             <input
               type="number" min={10} max={MAX_SAMPLE} value={sampleSize}
               onChange={e => setSampleSize(Math.max(10, Math.min(MAX_SAMPLE, Number(e.target.value) || 0)))}
+            />
+          </label>
+
+          <label title="Connections per node. Higher m = more neighbours checked per hop = better recall but slower search.">
+            m {collHnsw?.m != null && <span className="viz-default">(coll: {collHnsw.m})</span>}
+            <input
+              type="number" min={2} max={128} value={m}
+              onChange={e => setM(Math.max(2, Math.min(128, Number(e.target.value) || 2)))}
+            />
+          </label>
+
+          <label title="Candidate pool size while building the graph. Higher ef_construct = better-connected graph = faster, more accurate search (but slower build).">
+            ef_construct {collHnsw?.ef_construct != null && <span className="viz-default">(coll: {collHnsw.ef_construct})</span>}
+            <input
+              type="number" min={4} max={1000} value={efConstruct}
+              onChange={e => setEfConstruct(Math.max(4, Math.min(1000, Number(e.target.value) || 4)))}
             />
           </label>
 

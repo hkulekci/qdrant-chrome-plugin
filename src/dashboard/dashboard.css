@@ -4179,3 +4179,29 @@ header h1 {
   color: var(--text-secondary);
 }
 .viz-credit a { color: var(--accent); }
+
+.viz-default { color: var(--text-secondary); font-weight: 400; font-size: 0.72rem; }
+
+.viz-legend {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px 11px;
+  background: rgba(10, 14, 26, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  backdrop-filter: blur(6px);
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.75);
+  pointer-events: none;
+}
+.viz-legend span { display: flex; align-items: center; gap: 7px; }
+.viz-legend .dot {
+  width: 10px;
+  height: 3px;
+  border-radius: 2px;
+  display: inline-block;
+}

@@ -51,6 +51,9 @@ export interface SearchStep {
   layer?: number;
   hop?: number;
   isHit?: boolean;
+  /** The node being expanded — the source end of the edge this step traverses.
+   *  Present on `evaluate`/`hop` steps so the animation can light up the edge. */
+  from?: number;
 }
 
 export interface SearchResult {
@@ -90,17 +93,18 @@ export function runHNSWSearch(queryEmbedding: number[], graph: GraphState, k = 5
     steps.push({ nodeId: currObj, sim: round(currSim), type: lc === maxLayer ? 'entry' : 'drop', layer: lc, hop: steps.length });
     while (changed) {
       changed = false;
-      for (const neighbor of nodes[currObj].friends[lc] || []) {
+      const source = currObj;
+      for (const neighbor of nodes[source].friends[lc] || []) {
         if (seen.has(neighbor)) continue;
         seen.add(neighbor);
         const sim = cosineSim(queryEmbedding, nodes[neighbor].embedding);
         const isHit = sim > currSim;
-        steps.push({ nodeId: neighbor, sim: round(sim), type: 'evaluate', layer: lc, hop: steps.length, isHit });
+        steps.push({ nodeId: neighbor, sim: round(sim), type: 'evaluate', layer: lc, hop: steps.length, isHit, from: source });
         if (isHit) {
           currSim = sim;
           currObj = neighbor;
           changed = true;
-          steps.push({ nodeId: currObj, sim: round(currSim), type: 'hop', layer: lc, hop: steps.length });
+          steps.push({ nodeId: neighbor, sim: round(currSim), type: 'hop', layer: lc, hop: steps.length, from: source });
         }
       }
     }
@@ -129,7 +133,7 @@ export function runHNSWSearch(queryEmbedding: number[], graph: GraphState, k = 5
       const sim = cosineSim(queryEmbedding, nodes[neighbor].embedding);
       const worst = W.peek()!;
       const isHit = W.size < efSearch || sim > worst.sim;
-      steps.push({ nodeId: neighbor, sim: round(sim), type: 'evaluate', layer: 0, hop: steps.length, isHit });
+      steps.push({ nodeId: neighbor, sim: round(sim), type: 'evaluate', layer: 0, hop: steps.length, isHit, from: c.id });
 
       if (W.size < efSearch || sim > worst.sim) {
         C.push({ id: neighbor, sim });
@@ -137,7 +141,7 @@ export function runHNSWSearch(queryEmbedding: number[], graph: GraphState, k = 5
         if (W.size > efSearch) W.pop();
         if (sim > bestSimFound) {
           bestSimFound = sim;
-          steps.push({ nodeId: neighbor, sim: round(sim), type: 'hop', layer: 0, hop: steps.length });
+          steps.push({ nodeId: neighbor, sim: round(sim), type: 'hop', layer: 0, hop: steps.length, from: c.id });
         }
       }
     }

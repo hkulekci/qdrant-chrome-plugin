@@ -63,6 +63,9 @@ export interface RendererState {
   animFrame: number | null;
   tick: number;
   ripples: { sx: number; sy: number; r: number; maxR: number; alpha: number; color: string }[];
+  /** Edges recently evaluated during search, fading out. Colored by hit/miss so
+   *  the fan-out cost of a large `m` is visible. */
+  evalEdges: { from: number; to: number; isHit: boolean; life: number }[];
   rippleQueue?: { id: number; isHit?: boolean }[];
   prevStates: Record<number, NodeState>;
   cam: Cam;
@@ -87,6 +90,7 @@ export function useGraphRenderer(
     animFrame: null,
     tick: 0,
     ripples: [],
+    evalEdges: [],
     prevStates: {},
     cam: {
       rotY: 0.25, rotX: 0.18, targetRotY: 0.25, targetRotX: 0.18,
@@ -173,6 +177,23 @@ export function useGraphRenderer(
       ctx.lineTo(p2.sx, p2.sy);
       ctx.strokeStyle = `rgba(255, 255, 255, ${0.06 * depthAlpha})`;
       ctx.lineWidth = 0.5;
+      ctx.stroke();
+    });
+
+    // Evaluated edges (neighbour checks). Green = improved the result, red =
+    // rejected. Every neighbour of an expanded node lights up here, so a larger
+    // `m` visibly means more edges checked per hop.
+    state.evalEdges = state.evalEdges.filter(e => e.life > 0.05);
+    state.evalEdges.forEach(e => {
+      const p1 = projected[e.from], p2 = projected[e.to];
+      e.life *= 0.9;
+      if (!p1 || !p2) return;
+      const a = e.life;
+      ctx.beginPath();
+      ctx.moveTo(p1.sx, p1.sy);
+      ctx.lineTo(p2.sx, p2.sy);
+      ctx.strokeStyle = e.isHit ? `rgba(16, 185, 129, ${a})` : `rgba(239, 68, 68, ${0.7 * a})`;
+      ctx.lineWidth = e.isHit ? 1.6 : 1.0;
       ctx.stroke();
     });
 

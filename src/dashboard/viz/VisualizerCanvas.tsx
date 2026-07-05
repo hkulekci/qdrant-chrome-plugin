@@ -75,6 +75,7 @@ export function VisualizerCanvas({ graph }: { graph: VizGraph }) {
     state.prevStates = {};
     state.activePath = [];
     state.ripples = [];
+    state.evalEdges = [];
     state.rippleQueue = [];
     state.currentNode = null;
     state.isComplete = false;
@@ -101,6 +102,12 @@ export function VisualizerCanvas({ graph }: { graph: VizGraph }) {
         <div className="viz-hud-row"><span>Compute saved</span><b>{stats.computeSaved}%</b></div>
         <div className="viz-hud-row"><span>Top similarity</span><b>{stats.topSim.toFixed(4)}</b></div>
         {queryLabel && <div className="viz-hud-row"><span>Query point</span><b title={queryLabel}>{queryLabel.length > 12 ? queryLabel.slice(0, 12) + '…' : queryLabel}</b></div>}
+      </div>
+      <div className="viz-legend">
+        <span><i className="dot" style={{ background: '#10B981' }} />hit edge (improves)</span>
+        <span><i className="dot" style={{ background: '#EF4444' }} />miss edge (rejected)</span>
+        <span><i className="dot" style={{ background: '#0070F3' }} />chosen path</span>
+        <span><i className="dot" style={{ background: '#10B981' }} />top-k result</span>
       </div>
       <div className="viz-controls">
         <button className="btn btn-refresh" onClick={runSearch} disabled={running}>

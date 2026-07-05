@@ -49,22 +49,28 @@ export function useAnimator(
           state.activePath = [];
           visitedCount++;
           break;
-        case 'hop':
+        case 'hop': {
           state.nodeStates[step.nodeId] = 'visited';
+          const src = step.from ?? prevHopNode;
           if (state.currentLayer !== step.layer) {
             state.activePath = [];
             state.currentLayer = step.layer;
-          } else if (prevHopNode !== null && prevHopNode !== step.nodeId) {
-            state.activePath.push({ from: prevHopNode, to: step.nodeId });
+          } else if (src !== null && src !== undefined && src !== step.nodeId) {
+            state.activePath.push({ from: src, to: step.nodeId });
             if (state.activePath.length > 10) state.activePath.shift();
           }
           prevHopNode = step.nodeId;
           state.currentNode = step.nodeId;
           break;
+        }
         case 'evaluate':
           if (!state.nodeStates[step.nodeId]) {
             state.nodeStates[step.nodeId] = 'visited';
             visitedCount++;
+          }
+          if (step.from !== undefined) {
+            state.evalEdges.push({ from: step.from, to: step.nodeId, isHit: !!step.isHit, life: 1 });
+            if (state.evalEdges.length > 120) state.evalEdges.shift();
           }
           state.rippleQueue = state.rippleQueue || [];
           state.rippleQueue.push({ id: step.nodeId, isHit: step.isHit });
