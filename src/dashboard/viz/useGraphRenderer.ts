@@ -8,7 +8,7 @@
 
 import { useRef, useCallback, type RefObject } from 'react';
 
-export interface RenderNode { x: number; y: number; cluster: number }
+export interface RenderNode { x: number; y: number; cluster: number; layer: number }
 export interface RenderEdge { from: number; to: number }
 
 interface Cam {
@@ -100,10 +100,13 @@ export function useGraphRenderer(
     nodeZ: null,
   });
 
-  // Assign a z per node from its cluster so clusters separate in depth.
+  // Assign a z per node from its HNSW layer so the levels separate in depth:
+  // the sparse upper layers float on their own planes above the dense layer 0,
+  // like the classic hierarchical HNSW diagram.
   if (!stateRef.current.nodeZ && nodes.length > 0) {
-    const clusterZ = [-100, 80, -60, 100, -80, 60, -40, 100, 20, -20];
-    stateRef.current.nodeZ = nodes.map(n => (clusterZ[n.cluster] ?? 0) + (Math.random() - 0.5) * 40);
+    const maxLayer = nodes.reduce((mx, n) => Math.max(mx, n.layer), 0);
+    const gap = 110;
+    stateRef.current.nodeZ = nodes.map(n => (n.layer - maxLayer / 2) * gap + (Math.random() - 0.5) * 18);
   }
 
   const draw = useCallback(() => {

@@ -4205,3 +4205,33 @@ header h1 {
   border-radius: 2px;
   display: inline-block;
 }
+
+.viz-hit { color: #10B981; }
+.viz-miss { color: #EF4444; }
+
+.viz-hud-layers {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.viz-hud-layers-title {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 3px;
+}
+.viz-layer-row.active {
+  color: #fff;
+}
+.viz-layer-row.active span { color: rgba(255, 255, 255, 0.9); }
+
+.viz-legend-note {
+  margin-top: 2px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.68rem;
+  max-width: 190px;
+  line-height: 1.3;
+}
