@@ -31,13 +31,30 @@ export class QdrantApi {
     this.apiKey = apiKey || '';
   }
 
-  private async _fetch<T>(path: string): Promise<T> {
+  private async _fetch<T>(path: string, base: string = this.baseUrl): Promise<T> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (this.apiKey) headers['api-key'] = this.apiKey;
 
-    const response = await fetch(`${this.baseUrl}${path}`, { headers });
+    const response = await fetch(`${base}${path}`, { headers });
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     return response.json() as Promise<T>;
+  }
+
+  /** Qdrant Cloud exposes a stable public domain per node, e.g.
+   *  `node-0-<cluster>.<region>.cloud.qdrant.io`, alongside the load-balanced
+   *  cluster domain. Given the cluster base URL and a node ordinal, return that
+   *  node's URL — or null when the base URL isn't a rewritable Cloud domain
+   *  (self-hosted, or already a node-specific domain). */
+  static cloudNodeUrl(baseUrl: string, index: number): string | null {
+    try {
+      const u = new URL(baseUrl);
+      if (!u.hostname.endsWith('.cloud.qdrant.io')) return null;
+      if (/^node-\d+-/.test(u.hostname)) return null;
+      u.hostname = `node-${index}-${u.hostname}`;
+      return u.origin;
+    } catch {
+      return null;
+    }
   }
 
   private async _request<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -91,8 +108,8 @@ export class QdrantApi {
     return data.result;
   }
 
-  async getTelemetry(): Promise<Telemetry> {
-    const data = await this._fetch<QdrantResponse<Telemetry>>('/telemetry?details_level=10');
+  async getTelemetry(base?: string): Promise<Telemetry> {
+    const data = await this._fetch<QdrantResponse<Telemetry>>('/telemetry?details_level=10', base);
     return data.result;
   }
 
@@ -160,6 +177,59 @@ export class QdrantApi {
     return byId;
   }
 
+  // Extract each peer's node ordinal from its cluster uri. Qdrant reports peer
+  // uris like `http://qdrant-0.qdrant-headless...:6335/`; the `-0.` ordinal is
+  // the same index used by the public `node-0-...` Cloud domain. Returns null
+  // for a peer whose uri carries no ordinal.
+  private static peerNodeIndex(uri: string | undefined): number | null {
+    const m = uri?.match(/-(\d+)\./);
+    return m ? parseInt(m[1], 10) : null;
+  }
+
+  // Preferred telemetry collection for Qdrant Cloud: hit each node's own public
+  // domain directly (derived from the cluster peer list), so every telemetry
+  // payload is genuinely from that node. Far more reliable than repeatedly
+  // hitting the load balancer and hoping to land on each node. Falls back to
+  // load-balancer rotation for self-hosted clusters or unrecognised URLs.
+  private async collectPerNodeTelemetry(cluster: ClusterInfo): Promise<Record<string, Telemetry>> {
+    const peers = cluster?.peers || {};
+    const entries = Object.entries(peers).map(([pid, p]) => ({
+      pid,
+      index: QdrantApi.peerNodeIndex(p?.uri),
+    }));
+
+    const canPerNode =
+      entries.length > 0 &&
+      entries.every(e => e.index !== null) &&
+      QdrantApi.cloudNodeUrl(this.baseUrl, 0) !== null;
+
+    if (canPerNode) {
+      const results = await Promise.all(
+        entries.map(async ({ pid, index }) => {
+          const nodeUrl = QdrantApi.cloudNodeUrl(this.baseUrl, index!);
+          try {
+            return { pid, tel: await this.getTelemetry(nodeUrl!) };
+          } catch {
+            return { pid, tel: null };
+          }
+        }),
+      );
+
+      const byPeer: Record<string, Telemetry> = {};
+      for (const { pid, tel } of results) {
+        if (tel) {
+          const peerId = tel.cluster?.status?.peer_id?.toString() || pid;
+          byPeer[peerId] = tel;
+        }
+      }
+      if (Object.keys(byPeer).length > 0) return byPeer;
+    }
+
+    // Fallback: rotate through the load balancer.
+    const telemetryById = await this.collectAllNodeTelemetry(Object.keys(peers).length || 1);
+    return QdrantApi.mapTelemetryToNodes(telemetryById);
+  }
+
   // Map telemetry id -> peer_id using cluster.status.peer_id inside telemetry
   private static mapTelemetryToNodes(telemetryById: Record<string, Telemetry>): Record<string, Telemetry> {
     const nodeTelemetry: Record<string, Telemetry> = {};
@@ -179,7 +249,7 @@ export class QdrantApi {
     const peerCount = cluster?.peers ? Object.keys(cluster.peers).length : 1;
 
     const collectionDetails: DashboardData['collectionDetails'] = {};
-    const [, telemetryById] = await Promise.all([
+    const [, nodeTelemetry] = await Promise.all([
       Promise.all(
         collections.map(async (name) => {
           try {
@@ -193,10 +263,9 @@ export class QdrantApi {
           }
         })
       ),
-      this.collectAllNodeTelemetry(peerCount),
+      this.collectPerNodeTelemetry(cluster),
     ]);
 
-    const nodeTelemetry = QdrantApi.mapTelemetryToNodes(telemetryById);
     const telemetry = Object.values(nodeTelemetry)[0] || null;
 
     console.log(`Telemetry collected from ${Object.keys(nodeTelemetry).length}/${peerCount} nodes`);
