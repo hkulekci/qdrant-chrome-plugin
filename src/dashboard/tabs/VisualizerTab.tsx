@@ -1,10 +1,21 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ClusterConfig, DashboardData, VectorConfig } from '../../lib/types';
 import { QdrantApi } from '../../lib/qdrant-api';
 import { buildVizGraph, type VizGraph } from '../../lib/hnsw';
 import { VisualizerCanvas } from '../viz/VisualizerCanvas';
 
 const MAX_SAMPLE = 2000;
+const MAX_GRAPHS = 5;
+
+/** One built graph kept on the page, with the config it was built from so the
+ *  user can compare how different HNSW settings behave on the same real data. */
+interface BuiltGraph {
+  id: number;
+  graph: VizGraph;
+  collection: string;
+  vectorName?: string;
+  sampleSize: number;
+}
 
 /** List named dense vectors for a collection, or [undefined] for a single
  *  unnamed vector, plus the per-name HNSW params. */
@@ -22,8 +33,8 @@ export function VisualizerTab({ data, cluster }: { data: DashboardData; cluster:
   const [sampleSize, setSampleSize] = useState(300);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [graph, setGraph] = useState<VizGraph | null>(null);
-  const [buildToken, setBuildToken] = useState(0);
+  const [graphs, setGraphs] = useState<BuiltGraph[]>([]);
+  const nextIdRef = useRef(1);
 
   const info = data.collectionDetails[collection]?.info;
   const vecOpts = useMemo(() => vectorOptions(info?.config?.params?.vectors), [info]);
@@ -49,7 +60,6 @@ export function VisualizerTab({ data, cluster }: { data: DashboardData; cluster:
   const build = async () => {
     setError(null);
     setLoading(true);
-    setGraph(null);
     try {
       const api = new QdrantApi(cluster.url, cluster.apiKey);
       const points = await api.scrollPoints(collection, { limit: sampleSize, vectorName });
@@ -61,14 +71,17 @@ export function VisualizerTab({ data, cluster }: { data: DashboardData; cluster:
         points.map(p => ({ pointId: p.id, vector: p.vector })),
         { m, efConstruction: efConstruct, seed: 1 },
       );
-      setGraph(built);
-      setBuildToken(t => t + 1);
+      const entry: BuiltGraph = { id: nextIdRef.current++, graph: built, collection, vectorName, sampleSize };
+      // Newest on top; keep at most MAX_GRAPHS so the page stays comparable.
+      setGraphs(prev => [entry, ...prev].slice(0, MAX_GRAPHS));
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(false);
     }
   };
+
+  const removeGraph = (id: number) => setGraphs(prev => prev.filter(g => g.id !== id));
 
   return (
     <>
@@ -85,7 +98,7 @@ export function VisualizerTab({ data, cluster }: { data: DashboardData; cluster:
         <div className="viz-form">
           <label>
             Collection
-            <select value={collection} onChange={e => { setCollection(e.target.value); setVectorName(undefined); setGraph(null); }}>
+            <select value={collection} onChange={e => { setCollection(e.target.value); setVectorName(undefined); }}>
               {data.collections.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </label>
@@ -131,27 +144,37 @@ export function VisualizerTab({ data, cluster }: { data: DashboardData; cluster:
         <p className="viz-hint" style={{ marginBottom: 0 }}>
           {typeof pointCount === 'number' && <>Collection has {pointCount.toLocaleString()} points. </>}
           A sample of up to {MAX_SAMPLE} is used to keep in-browser graph construction fast.
+          Each build is added on top; up to {MAX_GRAPHS} are kept so you can compare configs side by side.
         </p>
 
         {error && <div className="error-box" style={{ marginTop: 12 }}>{error}</div>}
       </div>
 
-      {graph && (
-        <div className="card">
-          <div className="viz-meta">
-            <span className="meta-tag"><span className="label">Nodes:</span><span className="val">{graph.nodes.length}</span></span>
-            <span className="meta-tag"><span className="label">m:</span><span className="val">{graph.params.m}</span></span>
-            <span className="meta-tag"><span className="label">m₀:</span><span className="val">{graph.params.m0}</span></span>
-            <span className="meta-tag"><span className="label">ef_construct:</span><span className="val">{graph.params.efConstruction}</span></span>
+      {graphs.map((g, idx) => (
+        <div className="card" key={g.id}>
+          <div className="viz-card-head">
+            <div className="viz-meta">
+              <span className="meta-tag"><span className="label">#</span><span className="val">{g.id}</span></span>
+              <span className="meta-tag"><span className="label">Collection:</span><span className="val">{g.collection}{g.vectorName ? ` · ${g.vectorName}` : ''}</span></span>
+              <span className="meta-tag"><span className="label">Nodes:</span><span className="val">{g.graph.nodes.length}</span></span>
+              <span className="meta-tag"><span className="label">m:</span><span className="val">{g.graph.params.m}</span></span>
+              <span className="meta-tag"><span className="label">m₀:</span><span className="val">{g.graph.params.m0}</span></span>
+              <span className="meta-tag"><span className="label">ef_construct:</span><span className="val">{g.graph.params.efConstruction}</span></span>
+              {idx === 0 && <span className="status-badge green">newest</span>}
+            </div>
+            <button className="btn btn-secondary viz-remove" onClick={() => removeGraph(g.id)} title="Remove this graph">✕</button>
           </div>
-          <VisualizerCanvas key={buildToken} graph={graph} />
-          <p className="viz-credit">
-            Visualization engine adapted from{' '}
-            <a href="https://github.com/ManikBodamwad/HNSW_Vector_Search_Visualizer" target="_blank" rel="noopener noreferrer">
-              VectorLens by Manik Bodamwad
-            </a>{' '}(MIT).
-          </p>
+          <VisualizerCanvas graph={g.graph} />
         </div>
+      ))}
+
+      {graphs.length > 0 && (
+        <p className="viz-credit">
+          Visualization engine adapted from{' '}
+          <a href="https://github.com/ManikBodamwad/HNSW_Vector_Search_Visualizer" target="_blank" rel="noopener noreferrer">
+            VectorLens by Manik Bodamwad
+          </a>{' '}(MIT).
+        </p>
       )}
     </>
   );

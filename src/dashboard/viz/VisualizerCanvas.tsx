@@ -51,9 +51,17 @@ export function VisualizerCanvas({ graph }: { graph: VizGraph }) {
     return () => window.removeEventListener('resize', resize);
   }, []);
 
+  // Only animate while the canvas is on screen — with several stacked graphs
+  // this keeps the off-screen ones from burning frames.
   useEffect(() => {
-    startLoop();
-    return () => stopLoop();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const io = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) startLoop(); else stopLoop(); },
+      { threshold: 0.01 },
+    );
+    io.observe(canvas);
+    return () => { io.disconnect(); stopLoop(); };
   }, [startLoop, stopLoop]);
 
   // Pointer drag (rotate) / shift-drag (pan) and wheel zoom.
