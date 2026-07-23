@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   update:
@@ -26,15 +27,22 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm run update-versions
 
-      - name: Commit if changed
+      - name: Read latest version
+        id: latest
         run: |
-          if git diff --quiet -- src/lib/qdrant-versions.ts; then
-            echo "Qdrant versions already up to date."
-            exit 0
-          fi
           latest=$(grep "LATEST_KNOWN_VERSION" src/lib/qdrant-versions.ts | sed "s/.*'\(.*\)'.*/\1/")
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/lib/qdrant-versions.ts
-          git commit -m "Update known Qdrant versions to ${latest}"
-          git push
+          echo "version=$latest" >> "$GITHUB_OUTPUT"
+
+      - name: Open PR if changed
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "Update known Qdrant versions to ${{ steps.latest.outputs.version }}"
+          title: "Update known Qdrant versions to ${{ steps.latest.outputs.version }}"
+          body: |
+            Automated update of `src/lib/qdrant-versions.ts` from the live
+            [qdrant/qdrant releases](https://github.com/qdrant/qdrant/releases).
+
+            Latest known version: **${{ steps.latest.outputs.version }}**
+          branch: chore/update-qdrant-versions
+          delete-branch: true
+          add-paths: src/lib/qdrant-versions.ts
