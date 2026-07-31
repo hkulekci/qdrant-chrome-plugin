@@ -2089,6 +2089,147 @@ header h1 {
   font-family: monospace;
 }
 
+/* ── Resharding operation card ── */
+.reshard-card { border-color: var(--border-strong); }
+
+/* Stage stepper (migrate → read → write → finished) */
+.reshard-stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.reshard-stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+}
+
+.reshard-stage-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.reshard-stage.done { color: var(--success); border-color: rgba(16, 185, 129, 0.35); }
+.reshard-stage.active {
+  color: var(--info);
+  border-color: rgba(96, 165, 250, 0.5);
+  background: rgba(96, 165, 250, 0.12);
+}
+.reshard-stage.active .reshard-stage-dot {
+  opacity: 1;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.25);
+  animation: reshard-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes reshard-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.28); }
+  50% { box-shadow: 0 0 0 5px rgba(96, 165, 250, 0.12); }
+}
+
+/* Migrating shards / replicas grid */
+.reshard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 4px 18px;
+  margin-top: 12px;
+}
+
+.reshard-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 0.78rem;
+}
+
+.reshard-key { color: var(--text-secondary); min-width: 120px; }
+.reshard-vals { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.reshard-none { color: var(--text-muted); }
+
+.reshard-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--overlay-1);
+  border: 1px solid var(--border);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Per-transfer record progress */
+.reshard-transfer {
+  margin-top: 12px;
+  padding: 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.reshard-transfer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.reshard-transfer-peers { font-weight: 500; }
+.reshard-transfer-peers .arrow { color: var(--text-muted); }
+
+.reshard-bar {
+  margin-top: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--overlay-1);
+  overflow: hidden;
+}
+
+.reshard-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--info), var(--success));
+  transition: width var(--dur) var(--ease-out);
+}
+
+.reshard-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 5px;
+  font-size: 0.73rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.reshard-raw { margin-top: 10px; }
+.reshard-raw summary {
+  cursor: pointer;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+.reshard-raw pre {
+  margin-top: 6px;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* Each side of a transfer arrow shows the friendly node label stacked over
    the raw peer_id, so users can copy the exact id into a restart request. */
 .peer-endpoint {

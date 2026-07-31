@@ -149,11 +149,40 @@ export interface RemoteShardInfo extends ShardInfo {
 
 export interface ShardTransfer {
   shard_id: number;
+  /** Destination shard id — set for resharding transfers where records move
+   *  into a newly created shard. */
+  to_shard_id?: number;
   from: number;
   to: number;
   sync: boolean;
   method: string;
   comment?: string;
+}
+
+/** Per-collection resharding entry from a node's telemetry. */
+export interface ReshardingState {
+  uuid: string;
+  direction: string;
+  shard_id: number;
+  peer_id: number;
+  shard_key?: string | null;
+}
+
+/** Richer resharding state kept by the consensus cluster-manager, surfaced in
+ *  telemetry under `cluster.metadata`
+ *  (`_cluster_manager/resharding/collections/<name>`). */
+export interface ReshardingClusterMeta {
+  uuid: string;
+  direction: string;
+  shard_id: number;
+  peer_id: number;
+  stage: string;
+  relevant_shards?: number[];
+  shards_migrating?: number[];
+  shards_migrated?: number[];
+  replicas_migrating?: number[];
+  replicas_migrated?: number[];
+  replicas_deleted?: number[];
 }
 
 // --- Telemetry Types ---
@@ -186,6 +215,9 @@ export interface Telemetry {
       peer_id: number;
       consensus_thread_status: { consensus_thread_status: string; last_update: string };
     };
+    /** Consensus cluster-manager metadata, including per-collection resharding
+     *  state under `_cluster_manager/resharding/collections/<name>`. */
+    metadata?: Record<string, ReshardingClusterMeta | unknown>;
   };
   requests: {
     rest: { responses: Record<string, Record<string, RequestStats>> };
@@ -226,7 +258,7 @@ export interface TelemetryCollection {
   config: unknown;
   shards: TelemetryShard[];
   transfers: ShardTransfer[];
-  resharding: unknown[];
+  resharding: ReshardingState[];
 }
 
 export interface TelemetryShard {
