@@ -2092,12 +2092,19 @@ header h1 {
 /* ── Resharding operation card ── */
 .reshard-card { border-color: var(--border-strong); }
 
-/* Stage stepper (migrate → read → write → finished) */
+/* Current resharding stage, shown verbatim from telemetry */
 .reshard-stages {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
   margin-top: 12px;
+}
+
+.reshard-stage-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 
 .reshard-stage {
@@ -2121,7 +2128,6 @@ header h1 {
   opacity: 0.6;
 }
 
-.reshard-stage.done { color: var(--success); border-color: rgba(16, 185, 129, 0.35); }
 .reshard-stage.active {
   color: var(--info);
   border-color: rgba(96, 165, 250, 0.5);

@@ -72,17 +72,6 @@ function parseReshardProgress(comment?: string): { done: number; total: number; 
   return { done, total, etaSec: eta ? Number(eta[1]) : null };
 }
 
-// Canonical "up" resharding stages, in order. Matched case-/underscore-
-// insensitively so minor naming differences across Qdrant versions still line up.
-const RESHARD_STAGES = ['migrate_points', 'read_hash_ring', 'write_hash_ring', 'finished'];
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-const RESHARD_STAGE_LABEL: Record<string, string> = {
-  migrate_points: 'Migrate points',
-  read_hash_ring: 'Read hash ring',
-  write_hash_ring: 'Write hash ring',
-  finished: 'Finished',
-};
-
 function shardChips(ids: number[] | undefined) {
   if (!ids || ids.length === 0) return <span className="reshard-none">—</span>;
   return <>{ids.map(id => <span key={id} className="reshard-chip">{id}</span>)}</>;
@@ -106,7 +95,6 @@ function restartRequest(t: ShardTransfer & { collection: string }): string {
 function ReshardingCard({ op, pm }: { op: ReshardingOp; pm: PeerMapping }) {
   const { state, meta } = op;
   const stage = meta?.stage;
-  const activeIdx = stage ? RESHARD_STAGES.findIndex(s => norm(s) === norm(stage)) : -1;
   const peerLabel = pm.getLabel(String(state.peer_id));
 
   return (
@@ -126,16 +114,8 @@ function ReshardingCard({ op, pm }: { op: ReshardingOp; pm: PeerMapping }) {
 
       {stage && (
         <div className="reshard-stages">
-          {RESHARD_STAGES.map((s, i) => {
-            const cls = activeIdx < 0 ? 'pending' : i < activeIdx ? 'done' : i === activeIdx ? 'active' : 'pending';
-            return (
-              <span key={s} className={`reshard-stage ${cls}`}>
-                <span className="reshard-stage-dot" />
-                {RESHARD_STAGE_LABEL[s] || s}
-              </span>
-            );
-          })}
-          {activeIdx < 0 && <span className="reshard-stage active"><span className="reshard-stage-dot" />{stage}</span>}
+          <span className="reshard-stage-label">Stage</span>
+          <span className="reshard-stage active"><span className="reshard-stage-dot" />{stage}</span>
         </div>
       )}
 
