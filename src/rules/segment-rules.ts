@@ -28,6 +28,14 @@ registerRule('shard-high-segment-count', (ctx) => {
   return insights;
 });
 
+// Below this many vectors a high deleted ratio is not actionable: Qdrant's
+// optimizer only vacuums a segment once it holds at least
+// `vacuum_min_vector_number` vectors (default 1000), and small segments are
+// searched by brute force anyway — so 50% deleted out of ~10 vectors is noise,
+// not a problem. Matches Qdrant's own default so we don't warn about something
+// the optimizer would never act on.
+const MIN_VECTORS_FOR_DELETED_ALERT = 1000;
+
 registerRule('deleted-vectors-ratio', (ctx) => {
   const insights: Insight[] = [];
   for (const [peerId, nodeTel] of allNodeTelemetries(ctx)) {
@@ -36,7 +44,7 @@ registerRule('deleted-vectors-ratio', (ctx) => {
         for (const seg of (shard.local?.segments || [])) {
           const info = seg.info;
           const total = (info.num_vectors || 0) + (info.num_deleted_vectors || 0);
-          if (total > 0 && info.num_deleted_vectors > 0) {
+          if (total >= MIN_VECTORS_FOR_DELETED_ALERT && info.num_deleted_vectors > 0) {
             const pct = (info.num_deleted_vectors / total) * 100;
             if (pct > 20) {
               insights.push({ level: 'warning' as const, category: 'optimizer', collection: coll.id, shard: shard.id, node: peerId, title: `High deleted vectors (${pct.toFixed(0)}%) in shard ${shard.id}`, detail: `Segment ${(info.uuid || '').slice(0, 8)}... has ${info.num_deleted_vectors} deleted vectors. Optimizer should vacuum these.` });

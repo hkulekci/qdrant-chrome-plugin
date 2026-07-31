@@ -40,9 +40,19 @@ export function Dashboard() {
   const [insightsFilter, setInsightsFilter] = useState<InsightsFilter>(DEFAULT_INSIGHTS_FILTER);
   const { data, loading, error, capturedAt, history, refreshState, refresh, clearCache } = useDashboardData(cluster);
 
+  const [shardTarget, setShardTarget] = useState<{ collection: string; shard: number } | null>(null);
+
   const navigateToInsights = (filterOverride?: Partial<InsightsFilter>) => {
     setInsightsFilter({ ...DEFAULT_INSIGHTS_FILTER, ...filterOverride });
     setActiveTab('insights');
+  };
+
+  // Jump from an insight straight to the shard it is about, highlighting it in
+  // the Shard Distribution tab. A fresh object each call so the tab re-runs its
+  // scroll/highlight effect even when the same shard is requested twice.
+  const navigateToShard = (collection: string, shard: number) => {
+    setShardTarget({ collection, shard });
+    setActiveTab('shards');
   };
 
   const updateCluster = async (updates: Partial<ClusterConfig>): Promise<void> => {
@@ -159,14 +169,14 @@ export function Dashboard() {
 
           {activeTab === 'overview' && <OverviewTab data={data} history={history} capturedAt={capturedAt} refreshState={refreshState} cluster={cluster} onUpdateCluster={updateCluster} onClearCache={clearCache} />}
           {activeTab === 'collections' && <CollectionsTab data={data} insights={insights} cluster={cluster} onRefresh={refresh} onNavigateInsights={navigateToInsights} />}
-          {activeTab === 'shards' && <ShardsTab data={data} />}
+          {activeTab === 'shards' && <ShardsTab data={data} target={shardTarget} />}
           {activeTab === 'optimizations' && <OptimizationsTab data={data} cluster={cluster} />}
           {activeTab === 'transfers' && <TransfersTab data={data} />}
           {activeTab === 'cluster' && <ClusterTab data={data} />}
           {activeTab === 'requests' && <RequestsTab data={data} />}
           {activeTab === 'visualizer' && <VisualizerTab data={data} cluster={cluster} />}
           {activeTab === 'upgrade' && <UpgradeTab data={data} cluster={cluster} />}
-          {activeTab === 'insights' && <InsightsTab insights={insights} filter={insightsFilter} onFilterChange={setInsightsFilter} collections={data.collections} data={data} />}
+          {activeTab === 'insights' && <InsightsTab insights={insights} filter={insightsFilter} onFilterChange={setInsightsFilter} collections={data.collections} data={data} onViewShard={navigateToShard} />}
         </>
       )}
     </div>

@@ -10,7 +10,9 @@ import type {
 import { formatNumber, formatDuration } from '../../lib/format';
 import { QdrantApi } from '../../lib/qdrant-api';
 
-const REFRESH_MS = 3000;
+// Selectable auto-refresh intervals (seconds). `null` means off.
+const REFRESH_OPTIONS: number[] = [1, 5, 10, 30, 60];
+const DEFAULT_REFRESH_SEC = 5;
 
 type StageStatus = 'done' | 'running' | 'queued';
 
@@ -331,12 +333,14 @@ type OptData = CollectionOptimizations | { error: string };
 export function OptimizationsTab({ data, cluster }: { data: DashboardData; cluster: ClusterConfig | null }) {
   const [optsByCollection, setOptsByCollection] = useState<Record<string, OptData>>({});
   const [loading, setLoading] = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [refreshSec, setRefreshSec] = useState<number | null>(DEFAULT_REFRESH_SEC);
   const [filter, setFilter] = useState<'all' | 'busy'>('all');
   const [lastFetched, setLastFetched] = useState<string>('');
+  // Reference "now" for elapsed/in-stage durations. Only advanced on an actual
+  // fetch, so durations don't silently tick up and imply a live refresh that
+  // isn't happening.
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const timerRef = useRef<number | null>(null);
-  const tickRef = useRef<number | null>(null);
 
   const fetchAll = useCallback(async () => {
     if (!cluster || data.collections.length === 0) return;
@@ -355,6 +359,7 @@ export function OptimizationsTab({ data, cluster }: { data: DashboardData; clust
     const next: Record<string, OptData> = {};
     for (const [name, res] of results) next[name] = res;
     setOptsByCollection(next);
+    setNowMs(Date.now());
     setLastFetched(new Date().toLocaleTimeString());
     setLoading(false);
   }, [cluster?.url, cluster?.apiKey, data.collections]);
@@ -364,23 +369,15 @@ export function OptimizationsTab({ data, cluster }: { data: DashboardData; clust
   }, [fetchAll]);
 
   useEffect(() => {
-    if (!autoRefresh) {
+    if (refreshSec == null) {
       if (timerRef.current) { window.clearInterval(timerRef.current); timerRef.current = null; }
       return;
     }
-    timerRef.current = window.setInterval(fetchAll, REFRESH_MS);
+    timerRef.current = window.setInterval(fetchAll, refreshSec * 1000);
     return () => {
       if (timerRef.current) window.clearInterval(timerRef.current);
     };
-  }, [autoRefresh, fetchAll]);
-
-  // 1s ticker so elapsed/in-stage durations feel live between fetches.
-  useEffect(() => {
-    tickRef.current = window.setInterval(() => setNowMs(Date.now()), 1000);
-    return () => {
-      if (tickRef.current) window.clearInterval(tickRef.current);
-    };
-  }, []);
+  }, [refreshSec, fetchAll]);
 
   const totalRunning = Object.values(optsByCollection).reduce((sum, d) => {
     if (!d || 'error' in d) return sum;
@@ -421,8 +418,16 @@ export function OptimizationsTab({ data, cluster }: { data: DashboardData; clust
             <button className={filter === 'busy' ? 'active' : ''} onClick={() => setFilter('busy')}>Busy only</button>
           </div>
           <label className="opt-auto-refresh">
-            <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />
-            Auto-refresh ({REFRESH_MS / 1000}s)
+            Auto-refresh
+            <select
+              value={refreshSec ?? 'off'}
+              onChange={(e) => setRefreshSec(e.target.value === 'off' ? null : Number(e.target.value))}
+            >
+              <option value="off">Off</option>
+              {REFRESH_OPTIONS.map((s) => (
+                <option key={s} value={s}>every {s}s</option>
+              ))}
+            </select>
           </label>
           <button className="btn btn-refresh" onClick={fetchAll} disabled={loading}>
             {loading ? 'Loading…' : 'Refresh'}

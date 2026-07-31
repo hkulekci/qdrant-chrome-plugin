@@ -146,14 +146,15 @@ function SegmentCard({ seg, index }: { seg: TelemetrySegment; index: number }) {
 }
 
 // Shard cell in the matrix
-function ShardCell({ nodeInfo, segments, cellId, pm, pid, activePopup, setActivePopup, expandedDetails, toggleDetails }: {
+function ShardCell({ nodeInfo, segments, cellId, pm, pid, highlighted, activePopup, setActivePopup, expandedDetails, toggleDetails }: {
   nodeInfo: { type: string; state: string; points: number } | null;
   segments: TelemetrySegment[];
-  cellId: string; pm: PeerMapping; pid: string;
+  cellId: string; pm: PeerMapping; pid: string; highlighted?: boolean;
   activePopup: string | null; setActivePopup: (id: string | null) => void;
   expandedDetails: Set<string>; toggleDetails: (id: string) => void;
 }) {
-  if (!nodeInfo) return <div className="shard-cell empty"><span style={{ opacity: 0.3 }}>-</span></div>;
+  const hl = highlighted ? ' highlight-target' : '';
+  if (!nodeInfo) return <div className={`shard-cell empty${hl}`}><span style={{ opacity: 0.3 }}>-</span></div>;
 
   const stateLC = (nodeInfo.state || '').toLowerCase();
   let cellClass = 'empty';
@@ -171,7 +172,7 @@ function ShardCell({ nodeInfo, segments, cellId, pm, pid, activePopup, setActive
   for (const s of sorted) segTotalPts += s.info?.num_points || 0;
 
   return (
-    <div className={`shard-cell ${cellClass}`}>
+    <div className={`shard-cell ${cellClass}${hl}`}>
       <span className={`state ${cellClass}`}>{nodeInfo.state || '?'}</span>
       <span className="points">{formatNumber(nodeInfo.points)} pts</span>
       <span className="shard-cell-type">{nodeInfo.type}</span>
@@ -194,10 +195,11 @@ function ShardCell({ nodeInfo, segments, cellId, pm, pid, activePopup, setActive
 }
 
 // Collection shard matrix
-function CollectionShardMatrix({ collName, data, segIndex, pm }: {
+function CollectionShardMatrix({ collName, data, segIndex, pm, highlightShard }: {
   collName: string; data: DashboardData;
   segIndex: Record<number, Record<string, TelemetryLocalShard>>;
   pm: PeerMapping;
+  highlightShard?: number;
 }) {
   const [activePopup, setActivePopup] = useState<string | null>(null);
   const [expandedDetails, setExpandedDetails] = useState<Set<string>>(new Set());
@@ -356,7 +358,7 @@ function CollectionShardMatrix({ collName, data, segIndex, pm }: {
           const shardSegs = segIndex[sid] || {};
           return (
             <ShardRow key={sid} shardId={sid} shardKey={sd.shard_key} nodes={sd.nodes} segments={shardSegs}
-              allPeers={allPeers} collName={collName} pm={pm}
+              allPeers={allPeers} collName={collName} pm={pm} highlighted={highlightShard === sid}
               activePopup={activePopup} setActivePopup={setActivePopup}
               expandedDetails={expandedDetails} toggleDetails={toggleDetails} />
           );
@@ -367,11 +369,11 @@ function CollectionShardMatrix({ collName, data, segIndex, pm }: {
 }
 
 // One shard row in the matrix + its detail panels
-function ShardRow({ shardId, shardKey, nodes, segments, allPeers, collName, pm, activePopup, setActivePopup, expandedDetails, toggleDetails }: {
+function ShardRow({ shardId, shardKey, nodes, segments, allPeers, collName, pm, highlighted, activePopup, setActivePopup, expandedDetails, toggleDetails }: {
   shardId: number; shardKey?: string;
   nodes: Record<string, { type: string; state: string; points: number }>;
   segments: Record<string, TelemetryLocalShard>;
-  allPeers: string[]; collName: string; pm: PeerMapping;
+  allPeers: string[]; collName: string; pm: PeerMapping; highlighted?: boolean;
   activePopup: string | null; setActivePopup: (id: string | null) => void;
   expandedDetails: Set<string>; toggleDetails: (id: string) => void;
 }) {
@@ -379,7 +381,7 @@ function ShardRow({ shardId, shardKey, nodes, segments, allPeers, collName, pm, 
 
   return (
     <>
-      <div className="shard-label">
+      <div className={`shard-label${highlighted ? ' highlight-target' : ''}`} id={`shard-${idPrefix}-${shardId}`}>
         Shard {shardId}
         {shardKey && <span className="shard-key"> ({String(shardKey)})</span>}
       </div>
@@ -387,7 +389,7 @@ function ShardRow({ shardId, shardKey, nodes, segments, allPeers, collName, pm, 
         const cellId = `seg-${idPrefix}-${shardId}-${pid}`;
         return (
           <ShardCell key={pid} nodeInfo={nodes[pid] || null} segments={segments[pid]?.segments || []}
-            cellId={cellId} pm={pm} pid={pid}
+            cellId={cellId} pm={pm} pid={pid} highlighted={highlighted}
             activePopup={activePopup} setActivePopup={setActivePopup}
             expandedDetails={expandedDetails} toggleDetails={toggleDetails} />
         );
@@ -413,17 +415,39 @@ function ShardRow({ shardId, shardKey, nodes, segments, allPeers, collName, pm, 
   );
 }
 
+/** DOM id for a shard's row label — lets the Insights "View shard" button
+ *  scroll to and glow the exact shard it is about. */
+function shardDomId(collName: string, shardId: number): string {
+  return `shard-${collName.replace(/[^a-zA-Z0-9]/g, '_')}-${shardId}`;
+}
+
 // Main tab component
-export function ShardsTab({ data }: { data: DashboardData }) {
+export function ShardsTab({ data, target }: { data: DashboardData; target?: { collection: string; shard: number } | null }) {
   const pm = buildPeerMapping(data.cluster);
   const segIndex = buildSegIndex(data);
+  const [highlight, setHighlight] = useState<{ collection: string; shard: number } | null>(null);
+
+  // When arriving from an insight, scroll the target shard into view and glow
+  // it briefly. `target` is a fresh object per navigation so this re-runs even
+  // for the same shard twice.
+  useEffect(() => {
+    if (!target) return;
+    setHighlight(target);
+    const raf = requestAnimationFrame(() => {
+      document.getElementById(shardDomId(target.collection, target.shard))
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    const t = setTimeout(() => setHighlight(null), 3200);
+    return () => { cancelAnimationFrame(raf); clearTimeout(t); };
+  }, [target]);
 
   if (data.collections.length === 0) return <div className="card"><p style={{ color: 'var(--text-secondary)' }}>No collections.</p></div>;
 
   return (
     <>
       {data.collections.map(name => (
-        <CollectionShardMatrix key={name} collName={name} data={data} segIndex={segIndex[name] || {}} pm={pm} />
+        <CollectionShardMatrix key={name} collName={name} data={data} segIndex={segIndex[name] || {}} pm={pm}
+          highlightShard={highlight?.collection === name ? highlight.shard : undefined} />
       ))}
     </>
   );

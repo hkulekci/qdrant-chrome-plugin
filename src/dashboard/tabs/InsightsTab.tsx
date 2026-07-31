@@ -20,7 +20,8 @@ const LEVEL_LABEL: Record<InsightLevel, string> = {
 
 const ALL_LEVELS: InsightLevel[] = ['critical', 'warning', 'performance', 'info'];
 
-function InsightItem({ insight, onAsk }: { insight: Insight; onAsk: (ins: Insight) => void }) {
+function InsightItem({ insight, onAsk, onViewShard }: { insight: Insight; onAsk: (ins: Insight) => void; onViewShard?: (collection: string, shard: number) => void }) {
+  const canView = onViewShard && insight.collection && insight.shard !== undefined;
   return (
     <div className={`insight-item ${insight.level}`}>
       <span className="insight-icon">{ICONS[insight.level]}</span>
@@ -42,14 +43,26 @@ function InsightItem({ insight, onAsk }: { insight: Insight; onAsk: (ins: Insigh
           </details>
         )}
       </div>
-      <button
-        className="insight-ask-ai"
-        onClick={() => onAsk(insight)}
-        title="Ask an AI about this insight"
-      >
-        <span className="ask-ai-sparkle">✨</span>
-        <span className="ask-ai-text">Ask AI</span>
-      </button>
+      <div className="insight-actions">
+        {canView && (
+          <button
+            className="insight-view-shard"
+            onClick={() => onViewShard!(insight.collection!, insight.shard!)}
+            title={`Open Shard Distribution and highlight shard ${insight.shard}`}
+          >
+            <span className="view-shard-icon">🔍</span>
+            <span className="view-shard-text">View shard</span>
+          </button>
+        )}
+        <button
+          className="insight-ask-ai"
+          onClick={() => onAsk(insight)}
+          title="Ask an AI about this insight"
+        >
+          <span className="ask-ai-sparkle">✨</span>
+          <span className="ask-ai-text">Ask AI</span>
+        </button>
+      </div>
     </div>
   );
 }
@@ -60,9 +73,11 @@ interface Props {
   onFilterChange: (filter: InsightsFilter) => void;
   collections: string[];
   data: DashboardData;
+  /** Jump to the Shard Distribution tab and highlight the insight's shard. */
+  onViewShard?: (collection: string, shard: number) => void;
 }
 
-export function InsightsTab({ insights, filter, onFilterChange, collections, data }: Props) {
+export function InsightsTab({ insights, filter, onFilterChange, collections, data, onViewShard }: Props) {
   const [asking, setAsking] = useState<Insight | null>(null);
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -199,7 +214,7 @@ export function InsightsTab({ insights, filter, onFilterChange, collections, dat
         </div>
       ) : filter.group === 'flat' || !grouped ? (
         <div className="insights-list">
-          {filtered.map((ins, i) => <InsightItem key={i} insight={ins} onAsk={setAsking} />)}
+          {filtered.map((ins, i) => <InsightItem key={i} insight={ins} onAsk={setAsking} onViewShard={onViewShard} />)}
         </div>
       ) : (
         groupOrder
@@ -214,7 +229,7 @@ export function InsightsTab({ insights, filter, onFilterChange, collections, dat
                 <span className="insights-group-count">{grouped[key].length}</span>
               </div>
               <div className="insights-list">
-                {grouped[key].map((ins, i) => <InsightItem key={i} insight={ins} onAsk={setAsking} />)}
+                {grouped[key].map((ins, i) => <InsightItem key={i} insight={ins} onAsk={setAsking} onViewShard={onViewShard} />)}
               </div>
             </div>
           ))
