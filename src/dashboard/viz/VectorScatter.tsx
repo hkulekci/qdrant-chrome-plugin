@@ -27,6 +27,7 @@ interface VectorScatterProps {
   labels?: RegionLabel[]; // floating region labels at cluster centroids
   activeMask?: boolean[] | null; // per-point: false → dimmed (filtered out)
   busy?: boolean;         // overlay a spinner while re-querying / re-projecting
+  busyLabel?: string;     // text shown under the spinner
   lassoMode: boolean;
   resetToken: number;     // bump to reset pan/zoom
   onFocus: (f: FocusResult | null) => void;
@@ -85,7 +86,7 @@ function shortText(v: unknown, max = 42): string {
 }
 
 export function VectorScatter({
-  points, colors, vectors, labels, activeMask, busy, lassoMode, resetToken, onFocus, onLasso,
+  points, colors, vectors, labels, activeMask, busy, busyLabel, lassoMode, resetToken, onFocus, onLasso,
 }: VectorScatterProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -477,7 +478,7 @@ export function VectorScatter({
       {busy && (
         <div className="vec-scatter-busy">
           <div className="spinner" />
-          <span>Querying Qdrant…</span>
+          <span>{busyLabel || 'Working…'}</span>
         </div>
       )}
     </div>

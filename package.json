@@ -14,7 +14,8 @@
   "license": "AGPL-3.0-or-later",
   "dependencies": {
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "umap-js": "^1.4.0"
   },
   "devDependencies": {
     "@types/chrome": "^0.1.38",

@@ -11,8 +11,8 @@
 
 import { mkRng } from './rng';
 
-const CANVAS = { minX: 60, maxX: 940, minY: 60, maxY: 740 };
-const MAX_CLUSTERS = 10;
+export const CANVAS = { minX: 60, maxX: 940, minY: 60, maxY: 740 };
+export const MAX_CLUSTERS = 10;
 
 export interface Layout {
   x: number;
@@ -66,7 +66,7 @@ function deflate(centered: number[][], axis: number[]): void {
   }
 }
 
-function scaleToCanvas(values: number[], min: number, max: number): number[] {
+export function scaleToCanvas(values: number[], min: number, max: number): number[] {
   let lo = Infinity, hi = -Infinity;
   for (const v of values) { if (v < lo) lo = v; if (v > hi) hi = v; }
   const span = hi - lo || 1;
@@ -74,7 +74,7 @@ function scaleToCanvas(values: number[], min: number, max: number): number[] {
 }
 
 /** Deterministic k-means over the 2D projection; returns a cluster id per point. */
-function kmeans(points: { x: number; y: number }[], k: number, rng: () => number): number[] {
+export function kmeans(points: { x: number; y: number }[], k: number, rng: () => number): number[] {
   const n = points.length;
   const centers: { x: number; y: number }[] = [];
   const used = new Set<number>();

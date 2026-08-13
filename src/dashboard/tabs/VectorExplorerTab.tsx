@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ClusterConfig, DashboardData, VectorConfig, PayloadSchemaEntry } from '../../lib/types';
 import { QdrantApi } from '../../lib/qdrant-api';
-import { projectLayout } from '../../lib/hnsw/project';
+import { projectLayout, type Layout } from '../../lib/hnsw/project';
+import { projectUMAP } from '../../lib/hnsw/umap';
 import { VectorScatter, type ScatterPoint, type FocusResult, type RegionLabel } from '../viz/VectorScatter';
 import { FilterBuilder, computeFacets, matchesFilter, toQdrantFilter, type FilterCond, type FieldFacet, type FacetValue } from '../viz/FilterBuilder';
 import { VisualizerTab } from './VisualizerTab';
@@ -79,6 +80,24 @@ function computeRegionLabels(points: ScatterPoint[], field: string): RegionLabel
 interface LegendEntry { label: string; color: string; count: number; }
 interface LoadedData { points: ScatterPoint[]; vectors: number[][]; fields: string[]; textFields: string[]; }
 
+type ProjMethod = 'pca' | 'umap';
+
+/** Compute a 2D layout with the chosen projector. */
+function computeLayout(vectors: number[][], method: ProjMethod): Promise<Layout[]> {
+  return method === 'umap' ? projectUMAP(vectors) : Promise.resolve(projectLayout(vectors));
+}
+
+/** Rescale a raw layout's x/y into [0,1] for the scatter, keeping cluster ids. */
+function normalizeLayout(layout: Layout[]): { nx: number; ny: number; cluster: number }[] {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const l of layout) {
+    if (l.x < minX) minX = l.x; if (l.x > maxX) maxX = l.x;
+    if (l.y < minY) minY = l.y; if (l.y > maxY) maxY = l.y;
+  }
+  const spanX = maxX - minX || 1, spanY = maxY - minY || 1;
+  return layout.map(l => ({ nx: (l.x - minX) / spanX, ny: (l.y - minY) / spanY, cluster: l.cluster }));
+}
+
 // Payload index types Qdrant can facet: countable ones yield exact value
 // counts via the Facet API; range ones are filtered with a numeric min/max.
 const FACET_COUNTABLE = new Set(['keyword', 'integer', 'uuid', 'bool']);
@@ -99,6 +118,15 @@ function facetableFields(schema: Record<string, PayloadSchemaEntry> | undefined)
     if (FACET_COUNTABLE.has(type) || FACET_RANGE.has(type)) out.push({ field, type });
   }
   return out;
+}
+
+/** Merge payload conditions with a `has_id` condition (pinned lasso selection)
+ *  into one Qdrant filter. Returns undefined when both are empty. */
+function combinedFilter(conds: FilterCond[], ids: (string | number)[]): Record<string, unknown> | undefined {
+  const base = toQdrantFilter(conds);
+  const must: unknown[] = base?.must ? [...(base.must as unknown[])] : [];
+  if (ids.length) must.push({ has_id: ids });
+  return must.length ? { must } : undefined;
 }
 
 /** Turn server facet hits (+ range-only fields) into builder facets. */
@@ -167,12 +195,17 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
   const [loaded, setLoaded] = useState<LoadedData | null>(null);
   const [colorField, setColorField] = useState<string>(CLUSTER_FIELD);
   const [labelField, setLabelField] = useState<string>(NO_LABEL);
+  const [method, setMethod] = useState<ProjMethod>('pca');
+  const [busyLabel, setBusyLabel] = useState('Loading…');
   const [lassoMode, setLassoMode] = useState(false);
   const [resetToken, setResetToken] = useState(0);
 
   const [focus, setFocus] = useState<FocusResult | null>(null);
   const [lassoSel, setLassoSel] = useState<number[]>([]);
   const [filter, setFilter] = useState<FilterCond[]>([]);
+  // Point ids pinned via a lasso selection → isolated with a Qdrant `has_id`
+  // filter so only that region is fetched and re-projected on its own.
+  const [idFilter, setIdFilter] = useState<(string | number)[]>([]);
   const [serverFacets, setServerFacets] = useState<Record<string, FacetValue[]>>({});
   const [facetLoading, setFacetLoading] = useState(false);
   const [facetUnavailable, setFacetUnavailable] = useState(false);
@@ -237,7 +270,7 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
   // Refresh exact facet counts. Each field is faceted under the OTHER active
   // conditions (not its own) so its full option list stays visible — standard
   // faceted-search behaviour.
-  const loadFacets = async (activeFilter: FilterCond[]) => {
+  const loadFacets = async (activeFilter: FilterCond[], ids: (string | number)[]) => {
     const countable = facetFields.filter(f => FACET_COUNTABLE.has(f.type));
     if (!countable.length) { setServerFacets({}); setFacetUnavailable(facetFields.length > 0); return; }
     setFacetLoading(true);
@@ -246,7 +279,7 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
       const results = await Promise.all(countable.map(async f => {
         const other = activeFilter.filter(c => c.field !== f.field);
         try {
-          return [f.field, await api.facet(collection, { key: f.field, limit: 24, filter: toQdrantFilter(other) })] as const;
+          return [f.field, await api.facet(collection, { key: f.field, limit: 24, filter: combinedFilter(other, ids) })] as const;
         } catch {
           return [f.field, null] as const;
         }
@@ -264,12 +297,13 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
   // Core loader. `serverConds` narrows the sample server-side via a Qdrant
   // filter; `isRefilter` keeps the user's colour/label/filter choices instead
   // of resetting them, so drilling into a subset feels continuous.
-  const runLoad = async (serverConds: FilterCond[], isRefilter: boolean) => {
+  const runLoad = async (serverConds: FilterCond[], ids: (string | number)[], isRefilter: boolean) => {
     setError(null);
+    setBusyLabel(method === 'umap' ? 'Querying Qdrant & computing UMAP…' : 'Querying Qdrant…');
     setLoading(true);
     try {
       const api = new QdrantApi(cluster.url, cluster.apiKey);
-      const qfilter = serverConds.length ? toQdrantFilter(serverConds) : undefined;
+      const qfilter = combinedFilter(serverConds, ids);
       const raw = await api.scrollPointsWithPayload(collection, { limit: sampleSize, vectorName, filter: qfilter });
       if (raw.length === 0) {
         throw new Error(isRefilter
@@ -277,18 +311,12 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
           : 'No dense vectors returned. The collection may be empty, keep vectors on disk without returning them, or use only sparse vectors.');
       }
       const vectors = raw.map(p => p.vector);
-      const layout = projectLayout(vectors);
-      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-      for (const l of layout) {
-        if (l.x < minX) minX = l.x; if (l.x > maxX) maxX = l.x;
-        if (l.y < minY) minY = l.y; if (l.y > maxY) maxY = l.y;
-      }
-      const spanX = maxX - minX || 1, spanY = maxY - minY || 1;
+      const norm = normalizeLayout(await computeLayout(vectors, method));
       const points: ScatterPoint[] = raw.map((p, i) => ({
         id: p.id,
-        nx: (layout[i].x - minX) / spanX,
-        ny: (layout[i].y - minY) / spanY,
-        cluster: layout[i].cluster,
+        nx: norm[i].nx,
+        ny: norm[i].ny,
+        cluster: norm[i].cluster,
         payload: p.payload,
       }));
 
@@ -322,9 +350,10 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
         setColorField(CLUSTER_FIELD);
         setLabelField(textFields[0] ?? NO_LABEL);
         setFilter([]);
+        setIdFilter([]);
       }
-      appliedRef.current = JSON.stringify(serverConds);
-      void loadFacets(serverConds);
+      appliedRef.current = JSON.stringify({ f: serverConds, ids });
+      void loadFacets(serverConds, ids);
       setFocus(null);
       setLassoSel([]);
       setLassoMode(false);
@@ -336,18 +365,42 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
     }
   };
 
-  const load = () => runLoad([], false);
+  const load = () => runLoad([], [], false);
 
-  // Click-to-filter: whenever the filter changes, debounce a live server
-  // re-query (fresh matching sample → re-project) plus a facet refresh.
+  // Switch projection method and re-project the CURRENT sample in place — no
+  // refetch. UMAP recomputes locally (can take a moment); the busy overlay
+  // covers the wait. Watch the neighbour lines shorten under UMAP.
+  const changeMethod = async (m: ProjMethod) => {
+    setMethod(m);
+    if (!loaded || m === method) return;
+    setError(null);
+    setBusyLabel(m === 'umap' ? 'Computing UMAP…' : 'Projecting (PCA)…');
+    setLoading(true);
+    try {
+      const norm = normalizeLayout(await computeLayout(loaded.vectors, m));
+      const points = loaded.points.map((p, i) => ({ ...p, nx: norm[i].nx, ny: norm[i].ny, cluster: norm[i].cluster }));
+      setLoaded({ ...loaded, points });
+      setFocus(null);
+      setLassoSel([]);
+      setResetToken(t => t + 1);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Click-to-filter: whenever the facet filter OR the pinned id selection
+  // changes, debounce a live server re-query (fresh matching sample →
+  // re-project) plus a facet refresh.
   useEffect(() => {
     if (!loaded) return;
-    const key = JSON.stringify(filter);
+    const key = JSON.stringify({ f: filter, ids: idFilter });
     if (key === appliedRef.current) return;
-    const t = setTimeout(() => { runLoad(filter, true); }, 350);
+    const t = setTimeout(() => { runLoad(filter, idFilter, true); }, 350);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, loaded]);
+  }, [filter, idFilter, loaded]);
 
   const points = loaded?.points ?? [];
 
@@ -396,8 +449,9 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
 
         <p className="viz-hint" style={{ marginBottom: 0 }}>
           {typeof pointCount === 'number' && <>Collection has {pointCount.toLocaleString()} points. </>}
-          A sample of up to {MAX_SAMPLE.toLocaleString()} is projected client-side. PCA is fast and stable;
-          it shows global structure well (UMAP for finer local clusters is a planned follow-up).
+          A sample of up to {MAX_SAMPLE.toLocaleString()} is projected client-side. <b>PCA</b> (default) is fast
+          and shows global structure; switch to <b>UMAP</b> to preserve local neighbourhoods — the neighbour
+          lines you click shorten, so map proximity becomes far more trustworthy (slower to compute).
         </p>
 
         {error && <div className="error-box" style={{ marginTop: 12 }}>{error}</div>}
@@ -422,6 +476,13 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
                 </select>
               </label>
             )}
+            <span className="vec-inline vec-proj" title="PCA: fast, linear, global structure. UMAP: slower, preserves local neighbourhoods (map distances become far more trustworthy).">
+              Projection
+              <span className="vec-seg">
+                <button className={method === 'pca' ? 'on' : ''} onClick={() => changeMethod('pca')} disabled={loading}>PCA</button>
+                <button className={method === 'umap' ? 'on' : ''} onClick={() => changeMethod('umap')} disabled={loading}>UMAP</button>
+              </span>
+            </span>
             <button
               className={`btn btn-secondary vec-lasso ${lassoMode ? 'active' : ''}`}
               onClick={() => setLassoMode(m => !m)}
@@ -432,6 +493,15 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
             <button className="btn btn-secondary" onClick={() => setResetToken(t => t + 1)} title="Reset pan & zoom">
               Reset view
             </button>
+            {idFilter.length > 0 && (
+              <button
+                className="btn btn-secondary vec-isolated-badge"
+                onClick={() => setIdFilter([])}
+                title="Exit isolation — re-query the full collection"
+              >
+                ◎ Isolated {idFilter.length} ✕
+              </button>
+            )}
             <span className="vec-count">{points.length.toLocaleString()} points</span>
           </div>
 
@@ -455,6 +525,7 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
               labels={labels}
               activeMask={activeMask}
               busy={loading}
+              busyLabel={busyLabel}
               lassoMode={lassoMode}
               resetToken={resetToken}
               onFocus={setFocus}
@@ -517,6 +588,17 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
                     {lassoSel.length} selected
                     <button className="vec-clear" onClick={() => setLassoSel([])}>✕</button>
                   </div>
+                  <button
+                    className="btn btn-refresh vec-isolate"
+                    onClick={() => {
+                      const ids = lassoSel.map(i => points[i]?.id).filter(v => v !== undefined) as (string | number)[];
+                      setIdFilter(ids);
+                      setLassoSel([]);
+                    }}
+                    title="Query only these points from Qdrant and re-project them on their own"
+                  >
+                    ◎ Isolate these {lassoSel.length} →
+                  </button>
                   <div className="vec-neighbors">
                     {lassoSel.slice(0, 60).map(idx => (
                       <div key={idx} className="vec-neighbor-row">
@@ -529,10 +611,35 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
                 </div>
               )}
 
-              {!focus && lassoSel.length === 0 && (
+              {!focus && lassoSel.length === 0 && idFilter.length > 0 && (
+                <div className="vec-panel">
+                  <div className="vec-panel-title">
+                    Isolated · {idFilter.length} points
+                    <button className="vec-clear" onClick={() => setIdFilter([])} title="Exit isolation">✕</button>
+                  </div>
+                  <div className="vec-pin-note">
+                    Only these ids are queried from Qdrant and re-projected. Click ✕ on a row to drop it and
+                    re-project the rest.
+                  </div>
+                  <div className="vec-neighbors">
+                    {idFilter.slice(0, 200).map(id => (
+                      <div key={String(id)} className="vec-neighbor-row vec-pin-row">
+                        <span className="vec-neighbor-id">{fmt(id)}</span>
+                        <button
+                          className="vec-pin-x" title="Remove from selection"
+                          onClick={() => setIdFilter(prev => prev.filter(x => x !== id))}
+                        >✕</button>
+                      </div>
+                    ))}
+                    {idFilter.length > 200 && <div className="vec-legend-more">+ {idFilter.length - 200} more</div>}
+                  </div>
+                </div>
+              )}
+
+              {!focus && lassoSel.length === 0 && idFilter.length === 0 && (
                 <div className="vec-panel vec-hint-panel">
-                  Click a point to see its nearest neighbours, or toggle <b>Lasso</b> and draw a region to
-                  inspect a cluster. Colour by a payload field to see how metadata maps onto the embedding space.
+                  Click a point to see its nearest neighbours, or toggle <b>Lasso</b> and draw a region — then
+                  <b> Isolate</b> it to re-query just those points and visualise that area on its own.
                 </div>
               )}
             </div>

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import type { ScatterPoint } from './VectorScatter';
 
 // A single facet value with its occurrence count.
@@ -128,6 +129,80 @@ function rangeOf(conds: FilterCond[], field: string): { gte: number | null; lte:
   return c && c.kind === 'range' ? { gte: c.gte, lte: c.lte } : { gte: null, lte: null };
 }
 
+/** A compact multi-select dropdown for one categorical facet: closed it is a
+ *  single-line control summarising the selection; open it shows a searchable,
+ *  scrollable checklist of values with their counts. */
+function FacetSelect({ facet, selected, onToggle, onClear }: {
+  facet: FieldFacet;
+  selected: (string | number | boolean)[];
+  onToggle: (value: string | number | boolean) => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  const selSet = new Set(selected.map(String));
+  const summary = selected.length === 0
+    ? 'Any'
+    : selected.length <= 2 ? selected.map(String).join(', ') : `${selected.length} selected`;
+  const list = q
+    ? facet.values.filter(v => String(v.value).toLowerCase().includes(q.toLowerCase()))
+    : facet.values;
+
+  return (
+    <div className={`vec-ms ${open ? 'open' : ''}`} ref={ref}>
+      <button type="button" className={`vec-ms-control ${selected.length ? 'has' : ''}`} onClick={() => setOpen(o => !o)}>
+        <span className="vec-ms-summary">{summary}</span>
+        {selected.length > 0 && (
+          <span
+            className="vec-ms-clear" title="Clear" role="button"
+            onClick={e => { e.stopPropagation(); onClear(); }}
+          >✕</span>
+        )}
+        <span className="vec-ms-caret">▾</span>
+      </button>
+      {open && (
+        <div className="vec-ms-pop">
+          {facet.values.length > 8 && (
+            <input
+              className="vec-ms-search" placeholder="Search…" value={q} autoFocus
+              onChange={e => setQ(e.target.value)}
+            />
+          )}
+          <div className="vec-ms-list">
+            {list.map(v => {
+              const on = selSet.has(String(v.value));
+              return (
+                <button
+                  key={String(v.value)} type="button"
+                  className={`vec-ms-opt ${on ? 'on' : ''}`}
+                  onClick={() => onToggle(v.value)}
+                >
+                  <span className="vec-ms-check">{on ? '✓' : ''}</span>
+                  <span className="vec-ms-opt-label" title={String(v.value)}>{String(v.value)}</span>
+                  <span className="vec-ms-opt-count">{v.count.toLocaleString()}</span>
+                </button>
+              );
+            })}
+            {list.length === 0 && <div className="vec-ms-empty">No matches</div>}
+          </div>
+          {facet.distinctCount > facet.values.length && !q && (
+            <div className="vec-ms-more">top {facet.values.length} of {facet.distinctCount.toLocaleString()} values</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface Props {
   facets: FieldFacet[];
   conds: FilterCond[];
@@ -196,25 +271,12 @@ export function FilterBuilder({ facets, conds, onChange, onClear, loading, filte
                 </div>
 
                 {f.render === 'chips' ? (
-                  <div className="vec-chips">
-                    {f.values.map(v => {
-                      const on = sel.some(s => String(s) === String(v.value));
-                      return (
-                        <button
-                          key={String(v.value)}
-                          className={`vec-chip ${on ? 'on' : ''}`}
-                          onClick={() => toggleMatch(f.field, v.value)}
-                          title={`${v.value} — ${v.count.toLocaleString()}`}
-                        >
-                          <span className="vec-chip-label">{String(v.value)}</span>
-                          <span className="vec-chip-count">{v.count.toLocaleString()}</span>
-                        </button>
-                      );
-                    })}
-                    {f.distinctCount > f.values.length && (
-                      <span className="vec-chip-more">+{(f.distinctCount - f.values.length).toLocaleString()}</span>
-                    )}
-                  </div>
+                  <FacetSelect
+                    facet={f}
+                    selected={sel}
+                    onToggle={v => toggleMatch(f.field, v)}
+                    onClear={() => setFieldCond(f.field, null)}
+                  />
                 ) : (
                   <div className="vec-range">
                     <input

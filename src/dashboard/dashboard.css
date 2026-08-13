@@ -4510,11 +4510,61 @@ header h1 {
   border-color: rgba(167, 139, 250, 0.55);
   color: #a78bfa;
 }
+.vec-seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.vec-seg button {
+  padding: 4px 10px;
+  border: none;
+  background: var(--bg-elevated, var(--bg-secondary));
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+.vec-seg button + button { border-left: 1px solid var(--border); }
+.vec-seg button:hover:not(:disabled) { color: var(--text-primary); }
+.vec-seg button.on {
+  background: color-mix(in srgb, var(--info) 20%, transparent);
+  color: var(--info);
+  font-weight: 600;
+}
+.vec-seg button:disabled { cursor: default; opacity: 0.6; }
 .vec-count {
   margin-left: auto;
   font-size: 0.74rem;
   color: var(--text-secondary);
 }
+.vec-isolated-badge {
+  background: color-mix(in srgb, var(--info) 16%, transparent);
+  border-color: color-mix(in srgb, var(--info) 45%, transparent);
+  color: var(--info);
+  font-size: 0.74rem;
+}
+.vec-isolate {
+  width: 100%;
+  margin-bottom: 8px;
+  font-size: 0.76rem;
+}
+.vec-pin-note {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+.vec-pin-row { align-items: center; }
+.vec-pin-x {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.72rem;
+  padding: 0 4px;
+  border-radius: 4px;
+}
+.vec-pin-x:hover { color: var(--danger, #f87171); background: var(--bg-secondary); }
 
 /* ---- Filter builder ---- */
 .vec-filters {
@@ -4656,6 +4706,97 @@ header h1 {
   font-size: 0.74rem;
 }
 .vec-range-dash { color: var(--text-secondary); }
+
+/* Compact per-field multi-select */
+.vec-ms { position: relative; }
+.vec-ms-control {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.74rem;
+  cursor: pointer;
+  text-align: left;
+}
+.vec-ms-control:hover { border-color: var(--border-strong); }
+.vec-ms.open .vec-ms-control { border-color: var(--info); }
+.vec-ms-control.has { border-color: var(--info); }
+.vec-ms-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vec-ms-control:not(.has) .vec-ms-summary { color: var(--text-secondary); }
+.vec-ms-clear {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  padding: 0 2px;
+  border-radius: 4px;
+}
+.vec-ms-clear:hover { color: var(--text-primary); background: var(--border); }
+.vec-ms-caret { color: var(--text-secondary); font-size: 0.6rem; transition: transform 0.15s ease; }
+.vec-ms.open .vec-ms-caret { transform: rotate(180deg); }
+
+.vec-ms-pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: var(--bg-elevated, var(--bg-secondary));
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  padding: 6px;
+  overflow: hidden;
+}
+.vec-ms-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.74rem;
+}
+.vec-ms-list { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
+.vec-ms-list::-webkit-scrollbar { width: 7px; }
+.vec-ms-list::-webkit-scrollbar-thumb { background: var(--border-strong, var(--border)); border-radius: 4px; }
+.vec-ms-opt {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 5px 7px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.74rem;
+  cursor: pointer;
+  text-align: left;
+}
+.vec-ms-opt:hover { background: var(--bg-secondary); }
+.vec-ms-opt.on { color: var(--info); }
+.vec-ms-check {
+  width: 13px;
+  flex-shrink: 0;
+  color: var(--info);
+  font-size: 0.72rem;
+}
+.vec-ms-opt-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vec-ms-opt-count { color: var(--text-secondary); font-size: 0.66rem; font-variant-numeric: tabular-nums; }
+.vec-ms-empty { padding: 8px; font-size: 0.72rem; color: var(--text-secondary); text-align: center; }
+.vec-ms-more { padding: 6px 7px 2px; font-size: 0.64rem; color: var(--text-secondary); }
 
 .vec-filter-warn {
   font-size: 0.72rem;
