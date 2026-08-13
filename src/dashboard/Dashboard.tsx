@@ -14,13 +14,13 @@ import { RequestsTab } from './tabs/RequestsTab';
 import { OptimizationsTab } from './tabs/OptimizationsTab';
 import { InsightsTab } from './tabs/InsightsTab';
 import { UpgradeTab } from './tabs/UpgradeTab';
-import { VisualizerTab } from './tabs/VisualizerTab';
+import { VectorExplorerTab } from './tabs/VectorExplorerTab';
 import { UpdateBanner } from '../components/UpdateBanner';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { LATEST_KNOWN_VERSION } from '../lib/qdrant-versions';
 import { compareVersions, parseVersion } from '../lib/upgrade-planner';
 
-type TabName = 'overview' | 'collections' | 'shards' | 'optimizations' | 'transfers' | 'cluster' | 'requests' | 'insights' | 'upgrade' | 'visualizer';
+type TabName = 'overview' | 'collections' | 'shards' | 'optimizations' | 'transfers' | 'cluster' | 'requests' | 'insights' | 'upgrade' | 'explorer';
 
 const BASE_TABS: { key: TabName; label: string }[] = [
   { key: 'overview', label: 'Overview' },
@@ -30,7 +30,7 @@ const BASE_TABS: { key: TabName; label: string }[] = [
   { key: 'transfers', label: 'Transfers' },
   { key: 'cluster', label: 'Cluster' },
   { key: 'requests', label: 'Requests' },
-  { key: 'visualizer', label: 'Visualizer' },
+  { key: 'explorer', label: 'Vector Explorer' },
   { key: 'insights', label: 'Insights' },
 ];
 
@@ -174,7 +174,7 @@ export function Dashboard() {
           {activeTab === 'transfers' && <TransfersTab data={data} />}
           {activeTab === 'cluster' && <ClusterTab data={data} />}
           {activeTab === 'requests' && <RequestsTab data={data} />}
-          {activeTab === 'visualizer' && <VisualizerTab data={data} cluster={cluster} />}
+          {activeTab === 'explorer' && <VectorExplorerTab data={data} cluster={cluster} />}
           {activeTab === 'upgrade' && <UpgradeTab data={data} cluster={cluster} />}
           {activeTab === 'insights' && <InsightsTab insights={insights} filter={insightsFilter} onFilterChange={setInsightsFilter} collections={data.collections} data={data} onViewShard={navigateToShard} />}
         </>

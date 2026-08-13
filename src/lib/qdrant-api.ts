@@ -135,6 +135,56 @@ export class QdrantApi {
     return out;
   }
 
+  // Like scrollPoints, but also returns each point's payload — for the Vector
+  // Explorer, which colours the embedding map by payload fields and shows the
+  // payload on hover/selection. Points without a usable dense vector are dropped.
+  async scrollPointsWithPayload(
+    name: string,
+    opts: { limit: number; vectorName?: string; filter?: Record<string, unknown> },
+  ): Promise<{ id: string | number; vector: number[]; payload: Record<string, unknown> | null }[]> {
+    const withVector = opts.vectorName ? [opts.vectorName] : true;
+    const body: Record<string, unknown> = {
+      limit: opts.limit,
+      with_vector: withVector,
+      with_payload: true,
+    };
+    // Server-side subset exploration: a Qdrant filter narrows the sampled
+    // population to matching points, so rare sub-clusters can be inspected
+    // at full detail instead of hoping they surface in a random sample.
+    if (opts.filter) body.filter = opts.filter;
+    const data = await this._request<QdrantResponse<{
+      points: { id: string | number; vector: unknown; payload: Record<string, unknown> | null }[];
+    }>>(
+      'POST',
+      `/collections/${encodeURIComponent(name)}/points/scroll`,
+      body,
+    );
+
+    const out: { id: string | number; vector: number[]; payload: Record<string, unknown> | null }[] = [];
+    for (const p of data.result.points || []) {
+      const vec = extractDenseVector(p.vector, opts.vectorName);
+      if (vec) out.push({ id: p.id, vector: vec, payload: p.payload ?? null });
+    }
+    return out;
+  }
+
+  // Native Qdrant facet counts for a single payload key (Qdrant ≥ 1.12).
+  // Returns each distinct value with its count across the whole collection
+  // (or the matching subset when `filter` is given) — exact, index-backed
+  // numbers, unlike counting from a random sample. Only works on facetable
+  // payload indexes (keyword / integer / uuid / bool); other fields throw.
+  async facet(
+    name: string,
+    opts: { key: string; limit?: number; filter?: Record<string, unknown>; exact?: boolean },
+  ): Promise<{ value: string | number | boolean; count: number }[]> {
+    const body: Record<string, unknown> = { key: opts.key, limit: opts.limit ?? 24, exact: opts.exact ?? false };
+    if (opts.filter) body.filter = opts.filter;
+    const data = await this._request<QdrantResponse<{
+      hits: { value: string | number | boolean; count: number }[];
+    }>>('POST', `/collections/${encodeURIComponent(name)}/facet`, body);
+    return data.result.hits || [];
+  }
+
   async getCollectionOptimizations(name: string): Promise<CollectionOptimizations> {
     const data = await this._fetch<QdrantResponse<CollectionOptimizations>>(
       `/collections/${encodeURIComponent(name)}/optimizations?with=queued,completed`,
