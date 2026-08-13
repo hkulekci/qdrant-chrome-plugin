@@ -120,15 +120,6 @@ function facetableFields(schema: Record<string, PayloadSchemaEntry> | undefined)
   return out;
 }
 
-/** Merge payload conditions with a `has_id` condition (pinned lasso selection)
- *  into one Qdrant filter. Returns undefined when both are empty. */
-function combinedFilter(conds: FilterCond[], ids: (string | number)[]): Record<string, unknown> | undefined {
-  const base = toQdrantFilter(conds);
-  const must: unknown[] = base?.must ? [...(base.must as unknown[])] : [];
-  if (ids.length) must.push({ has_id: ids });
-  return must.length ? { must } : undefined;
-}
-
 /** Turn server facet hits (+ range-only fields) into builder facets. */
 function buildServerFacets(fields: FacetField[], hits: Record<string, FacetValue[]>): FieldFacet[] {
   const out: FieldFacet[] = [];
@@ -203,9 +194,12 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
   const [focus, setFocus] = useState<FocusResult | null>(null);
   const [lassoSel, setLassoSel] = useState<number[]>([]);
   const [filter, setFilter] = useState<FilterCond[]>([]);
-  // Point ids pinned via a lasso selection → isolated with a Qdrant `has_id`
-  // filter so only that region is fetched and re-projected on its own.
-  const [idFilter, setIdFilter] = useState<(string | number)[]>([]);
+  // Local isolation of a lasso selection: `baseSample` is the full sample kept
+  // so we can restore it on exit; `isoIds` marks the isolated point ids (null =
+  // not isolated). Isolation re-projects the selection's in-memory vectors — no
+  // server round-trip, so it can't drop points to id-precision issues.
+  const [baseSample, setBaseSample] = useState<LoadedData | null>(null);
+  const [isoIds, setIsoIds] = useState<(string | number)[] | null>(null);
   const [serverFacets, setServerFacets] = useState<Record<string, FacetValue[]>>({});
   const [facetLoading, setFacetLoading] = useState(false);
   const [facetUnavailable, setFacetUnavailable] = useState(false);
@@ -270,7 +264,7 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
   // Refresh exact facet counts. Each field is faceted under the OTHER active
   // conditions (not its own) so its full option list stays visible — standard
   // faceted-search behaviour.
-  const loadFacets = async (activeFilter: FilterCond[], ids: (string | number)[]) => {
+  const loadFacets = async (activeFilter: FilterCond[]) => {
     const countable = facetFields.filter(f => FACET_COUNTABLE.has(f.type));
     if (!countable.length) { setServerFacets({}); setFacetUnavailable(facetFields.length > 0); return; }
     setFacetLoading(true);
@@ -279,7 +273,7 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
       const results = await Promise.all(countable.map(async f => {
         const other = activeFilter.filter(c => c.field !== f.field);
         try {
-          return [f.field, await api.facet(collection, { key: f.field, limit: 24, filter: combinedFilter(other, ids) })] as const;
+          return [f.field, await api.facet(collection, { key: f.field, limit: 24, filter: toQdrantFilter(other) })] as const;
         } catch {
           return [f.field, null] as const;
         }
@@ -297,13 +291,13 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
   // Core loader. `serverConds` narrows the sample server-side via a Qdrant
   // filter; `isRefilter` keeps the user's colour/label/filter choices instead
   // of resetting them, so drilling into a subset feels continuous.
-  const runLoad = async (serverConds: FilterCond[], ids: (string | number)[], isRefilter: boolean) => {
+  const runLoad = async (serverConds: FilterCond[], isRefilter: boolean) => {
     setError(null);
     setBusyLabel(method === 'umap' ? 'Querying Qdrant & computing UMAP…' : 'Querying Qdrant…');
     setLoading(true);
     try {
       const api = new QdrantApi(cluster.url, cluster.apiKey);
-      const qfilter = combinedFilter(serverConds, ids);
+      const qfilter = serverConds.length ? toQdrantFilter(serverConds) : undefined;
       const raw = await api.scrollPointsWithPayload(collection, { limit: sampleSize, vectorName, filter: qfilter });
       if (raw.length === 0) {
         throw new Error(isRefilter
@@ -350,10 +344,12 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
         setColorField(CLUSTER_FIELD);
         setLabelField(textFields[0] ?? NO_LABEL);
         setFilter([]);
-        setIdFilter([]);
       }
-      appliedRef.current = JSON.stringify({ f: serverConds, ids });
-      void loadFacets(serverConds, ids);
+      // A fresh server sample always leaves any local isolation behind.
+      setBaseSample(null);
+      setIsoIds(null);
+      appliedRef.current = JSON.stringify(serverConds);
+      void loadFacets(serverConds);
       setFocus(null);
       setLassoSel([]);
       setLassoMode(false);
@@ -365,7 +361,57 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
     }
   };
 
-  const load = () => runLoad([], [], false);
+  const load = () => runLoad([], false);
+
+  // ---- Local isolation (client-side, no server round-trip) ----
+
+  // Re-project an in-memory subset (vectors already fetched) and show it alone.
+  const projectSubset = async (pts: ScatterPoint[], vecs: number[][]) => {
+    setError(null);
+    setBusyLabel(method === 'umap' ? 'Computing UMAP…' : 'Projecting…');
+    setLoading(true);
+    try {
+      const norm = normalizeLayout(await computeLayout(vecs, method));
+      const points = pts.map((p, i) => ({ ...p, nx: norm[i].nx, ny: norm[i].ny, cluster: norm[i].cluster }));
+      setLoaded(prev => ({ points, vectors: vecs, fields: prev?.fields ?? [], textFields: prev?.textFields ?? [] }));
+      setFocus(null);
+      setLassoSel([]);
+      setResetToken(t => t + 1);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const isolate = async (indices: number[]) => {
+    if (!loaded || !indices.length) return;
+    const base = baseSample ?? loaded;           // keep the original full sample
+    const pts = indices.map(i => loaded.points[i]);
+    const vecs = indices.map(i => loaded.vectors[i]);
+    setBaseSample(base);
+    setIsoIds(pts.map(p => p.id));
+    await projectSubset(pts, vecs);
+  };
+
+  const dropIsolatedId = async (id: string | number) => {
+    if (!loaded || !isoIds) return;
+    const keep: number[] = [];
+    loaded.points.forEach((p, i) => { if (p.id !== id) keep.push(i); });
+    if (!keep.length) { exitIsolation(); return; }
+    setIsoIds(keep.map(i => loaded.points[i].id));
+    await projectSubset(keep.map(i => loaded.points[i]), keep.map(i => loaded.vectors[i]));
+  };
+
+  const exitIsolation = () => {
+    if (!baseSample) return;
+    setLoaded(baseSample);
+    setBaseSample(null);
+    setIsoIds(null);
+    setFocus(null);
+    setLassoSel([]);
+    setResetToken(t => t + 1);
+  };
 
   // Switch projection method and re-project the CURRENT sample in place — no
   // refetch. UMAP recomputes locally (can take a moment); the busy overlay
@@ -390,17 +436,16 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
     }
   };
 
-  // Click-to-filter: whenever the facet filter OR the pinned id selection
-  // changes, debounce a live server re-query (fresh matching sample →
-  // re-project) plus a facet refresh.
+  // Click-to-filter: whenever the facet filter changes, debounce a live server
+  // re-query (fresh matching sample → re-project) plus a facet refresh.
   useEffect(() => {
     if (!loaded) return;
-    const key = JSON.stringify({ f: filter, ids: idFilter });
+    const key = JSON.stringify(filter);
     if (key === appliedRef.current) return;
-    const t = setTimeout(() => { runLoad(filter, idFilter, true); }, 350);
+    const t = setTimeout(() => { runLoad(filter, true); }, 350);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, idFilter, loaded]);
+  }, [filter, loaded]);
 
   const points = loaded?.points ?? [];
 
@@ -493,13 +538,13 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
             <button className="btn btn-secondary" onClick={() => setResetToken(t => t + 1)} title="Reset pan & zoom">
               Reset view
             </button>
-            {idFilter.length > 0 && (
+            {isoIds && (
               <button
                 className="btn btn-secondary vec-isolated-badge"
-                onClick={() => setIdFilter([])}
-                title="Exit isolation — re-query the full collection"
+                onClick={exitIsolation}
+                title="Exit isolation — restore the full sample"
               >
-                ◎ Isolated {idFilter.length} ✕
+                ◎ Isolated {isoIds.length} ✕
               </button>
             )}
             <span className="vec-count">{points.length.toLocaleString()} points</span>
@@ -590,12 +635,8 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
                   </div>
                   <button
                     className="btn btn-refresh vec-isolate"
-                    onClick={() => {
-                      const ids = lassoSel.map(i => points[i]?.id).filter(v => v !== undefined) as (string | number)[];
-                      setIdFilter(ids);
-                      setLassoSel([]);
-                    }}
-                    title="Query only these points from Qdrant and re-project them on their own"
+                    onClick={() => isolate(lassoSel)}
+                    title="Re-project only these points on their own"
                   >
                     ◎ Isolate these {lassoSel.length} →
                   </button>
@@ -611,32 +652,32 @@ export function VectorExplorerTab({ data, cluster }: { data: DashboardData; clus
                 </div>
               )}
 
-              {!focus && lassoSel.length === 0 && idFilter.length > 0 && (
+              {!focus && lassoSel.length === 0 && isoIds && (
                 <div className="vec-panel">
                   <div className="vec-panel-title">
-                    Isolated · {idFilter.length} points
-                    <button className="vec-clear" onClick={() => setIdFilter([])} title="Exit isolation">✕</button>
+                    Isolated · {isoIds.length} points
+                    <button className="vec-clear" onClick={exitIsolation} title="Exit isolation">✕</button>
                   </div>
                   <div className="vec-pin-note">
-                    Only these ids are queried from Qdrant and re-projected. Click ✕ on a row to drop it and
+                    Only these points are shown, re-projected on their own. Click ✕ on a row to drop it and
                     re-project the rest.
                   </div>
                   <div className="vec-neighbors">
-                    {idFilter.slice(0, 200).map(id => (
+                    {isoIds.slice(0, 200).map(id => (
                       <div key={String(id)} className="vec-neighbor-row vec-pin-row">
                         <span className="vec-neighbor-id">{fmt(id)}</span>
                         <button
                           className="vec-pin-x" title="Remove from selection"
-                          onClick={() => setIdFilter(prev => prev.filter(x => x !== id))}
+                          onClick={() => dropIsolatedId(id)}
                         >✕</button>
                       </div>
                     ))}
-                    {idFilter.length > 200 && <div className="vec-legend-more">+ {idFilter.length - 200} more</div>}
+                    {isoIds.length > 200 && <div className="vec-legend-more">+ {isoIds.length - 200} more</div>}
                   </div>
                 </div>
               )}
 
-              {!focus && lassoSel.length === 0 && idFilter.length === 0 && (
+              {!focus && lassoSel.length === 0 && !isoIds && (
                 <div className="vec-panel vec-hint-panel">
                   Click a point to see its nearest neighbours, or toggle <b>Lasso</b> and draw a region — then
                   <b> Isolate</b> it to re-query just those points and visualise that area on its own.

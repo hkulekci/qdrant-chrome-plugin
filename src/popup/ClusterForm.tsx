@@ -23,16 +23,26 @@ export function ClusterForm({ initial, onSave, onCancel }: Props) {
     setError(''); setSuccess(''); setTesting(true);
     try {
       const api = new QdrantApi(url, apiKey);
+      // /healthz is exempt from api-key auth, so it only proves the server is
+      // reachable — not that the key is valid. Hit an authenticated endpoint
+      // (/collections) so a wrong or missing key surfaces as a real failure.
       const ok = await api.healthz();
-      if (ok) {
-        try {
-          const tel = await api.getTelemetry();
-          setSuccess(`Connected! Qdrant v${tel.app?.version || 'unknown'}`);
-        } catch {
-          setSuccess('Connected!');
+      if (!ok) {
+        setError('Connection failed: the server is not reachable or not healthy.');
+        return;
+      }
+      try {
+        const cols = await api.getCollections();
+        let version = '';
+        try { const tel = await api.getTelemetry(); if (tel.app?.version) version = ` v${tel.app.version}`; } catch { /* version is best-effort */ }
+        setSuccess(`Connected${version}! API key OK — ${cols.length} collection${cols.length === 1 ? '' : 's'} visible.`);
+      } catch (e) {
+        const msg = (e as Error).message;
+        if (msg.includes('403') || msg.includes('401')) {
+          setError('Reachable, but the API key is missing or invalid (403). Check the key.');
+        } else {
+          setError(`Connection failed: ${msg}`);
         }
-      } else {
-        setError('Connection failed: server returned an error');
       }
     } catch (e) {
       setError(`Connection failed: ${(e as Error).message}`);
