@@ -31,11 +31,17 @@ export class QdrantApi {
     this.apiKey = apiKey || '';
   }
 
+  // All requests use `credentials: 'omit'` so the browser never attaches the
+  // target domain's cookies to our API calls, nor stores its Set-Cookie. On
+  // Qdrant Cloud this matters both ways: sending the console's session cookie
+  // alongside the api-key JWT triggers a 403 "InvalidSignature", and letting a
+  // response overwrite that cookie would log the user out of the Cloud UI open
+  // in the same browser. Auth is carried solely by the `api-key` header.
   private async _fetch<T>(path: string, base: string = this.baseUrl): Promise<T> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (this.apiKey) headers['api-key'] = this.apiKey;
 
-    const response = await fetch(`${base}${path}`, { headers });
+    const response = await fetch(`${base}${path}`, { headers, credentials: 'omit' });
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     return response.json() as Promise<T>;
   }
@@ -65,6 +71,7 @@ export class QdrantApi {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      credentials: 'omit',
     });
     if (!response.ok) {
       let msg = `HTTP ${response.status}: ${response.statusText}`;
@@ -81,6 +88,7 @@ export class QdrantApi {
     try {
       const response = await fetch(`${this.baseUrl}/healthz`, {
         headers: this.apiKey ? { 'api-key': this.apiKey } : {},
+        credentials: 'omit',
       });
       return response.ok;
     } catch {
