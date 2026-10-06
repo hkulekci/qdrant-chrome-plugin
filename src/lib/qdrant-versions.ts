@@ -34,12 +34,12 @@ export const LATEST_PATCH_BY_MINOR: Record<number, string> = {
   16: '1.16.3',
   17: '1.17.1',
   18: '1.18.3',
-  19: '1.19.1',
+  19: '1.19.2',
 };
 
 /** The newest release the plugin knows about. The default upgrade target. */
-export const LATEST_KNOWN_VERSION = '1.19.1';
+export const LATEST_KNOWN_VERSION = '1.19.2';
 
 /** When this file was last regenerated — surfaced in the UI so users can tell
  *  whether the version data is fresh. */
-export const VERSIONS_LAST_UPDATED = '2026-09-21';
+export const VERSIONS_LAST_UPDATED = '2026-10-06';
