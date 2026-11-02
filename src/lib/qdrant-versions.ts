@@ -43,4 +43,4 @@ export const LATEST_KNOWN_VERSION = '1.20.0';
 
 /** When this file was last regenerated — surfaced in the UI so users can tell
  *  whether the version data is fresh. */
-export const VERSIONS_LAST_UPDATED = '2026-10-26';
+export const VERSIONS_LAST_UPDATED = '2026-11-02';
